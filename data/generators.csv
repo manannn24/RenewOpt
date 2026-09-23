@@ -1,0 +1,4 @@
+source,max_capacity_mw,cost_per_mwh,co2_per_mwh
+Solar,400,10.0,0.0
+Wind,300,15.0,0.0
+Thermal,800,85.0,820.0
