@@ -7,9 +7,8 @@ The electrical grid must continuously balance supply and demand. Integrating lar
 Grid operators need an **Operations Research (OR) model** to determine the most cost-effective and reliable way to dispatch power across a **Full-Year (8,760-hour) planning horizon**.
 
 **RenewOpt solves the Economic Dispatch Problem** using Linear Programming (LP). The objective is to:
-1. **Minimize total generation cost** across a full year (8,760 hours).
-2. **Maximize renewable energy utilization**.
-3. **Satisfy continuous demand** while respecting capacity, availability, emission limits, and battery dynamics.
+1. **Primary optimization objective**: Minimize total system generation cost while satisfying demand and operational constraints.
+2. **Analytical consequence**: The model will naturally maximize renewable energy utilization to minimize cost because renewables have a zero marginal generation cost in this dataset.
 
 ---
 
@@ -50,6 +49,7 @@ $$ |T_t - T_{t-1}| \leq \text{RampLimit} \quad \forall t $$
 $$ T_t \cdot \text{CO2Factor}_{th} \leq \text{CO2Cap}_t \quad \forall t $$
 
 **5. Battery Dynamics** (Energy storage inter-temporal linkage):
+*(Note: Initial SOC is typically defined by `battery.csv` configuration, e.g., 200 MWh for hour 0)*
 $$ SOC_t = SOC_{t-1} + \eta_{charge} C_t - \frac{D_t}{\eta_{discharge}} \quad \forall t $$
 $$ \text{MinSOC} \leq SOC_t \leq \text{MaxCapacity} \quad \forall t $$
 $$ 0 \leq C_t \leq \text{MaxChargeRate}, \quad 0 \leq D_t \leq \text{MaxDischargeRate} \quad \forall t $$
@@ -63,7 +63,7 @@ $$ 0 \leq C_t \leq \text{MaxChargeRate}, \quad 0 \leq D_t \leq \text{MaxDischarg
 - Inter-temporal battery energy storage optimization (Charge, Discharge, State-of-Charge).
 - Thermal ramp-rate limitations (forces pre-positioning).
 - Hourly CO₂ emission caps.
-- **Reliability Mode (Soft Constraints)**: Uses high-penalty slack variables to identify when constraints must be broken, rather than simply reporting "Infeasible".
+- **Reliability Mode (Soft Constraints)**: Reliability mode introduces a penalized unmet-demand slack variable, allowing the model to remain solvable when strict demand satisfaction is impossible under the selected constraints.
 - **Shadow Pricing**: Extracts the dual values (shadow prices) of the demand-balance constraint to represent the marginal cost of electricity (₹/MWh) for every hour of the year.
 
 ### Metrics & Analytics

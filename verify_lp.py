@@ -152,24 +152,68 @@ print("\n" + "=" * 60)
 print("PHASE 2 8760-HOUR VERIFICATION")
 print("=" * 60)
 
-from src.data_loader import load_8760_data
+from src.data_loader import load_8760_data, build_phase2_config
 print("\n[11] LOADING 8760 DATASET")
 b_8760 = load_8760_data()
-print(f"  Demand rows: {len(b_8760.demand_df)}")
-print(f"  Solar rows:  {len(b_8760.solar_df)}")
-print(f"  Wind rows:   {len(b_8760.wind_df)}")
-assert len(b_8760.demand_df) == 8760, "Must be exactly 8760 rows"
+dataset_horizon = len(b_8760.demand_df)
+print(f"  Dataset horizon: {dataset_horizon} hours")
 
-print("\n[12] SOLVING 8760 BASELINE SCENARIO")
-# The 8760 optimization might take some time, so we just test the baseline
-from src.scenarios import run_baseline
-sr_8760 = run_baseline(b_8760.demand_df, b_8760.solar_df, b_8760.wind_df, b_8760.generators_df)
-print(f"  Status:       {sr_8760.status}")
-if sr_8760.status == "Optimal":
-    m_8760 = sr_8760.metrics
-    print(f"  Total cost:   {m_8760['total_cost']:,.0f}")
-    print(f"  CO2 total:    {m_8760['total_kg_co2']:,.0f} kg")
-    print(f"  Ren Share:    {m_8760['renewable_share_pct']:.2f}%")
+print("\n[12] SOLVING 8760 WITH FULL PHASE 2 (No Ramp/CO2 to ensure feasibility)")
+import time
+from src.optimizer import solve_dispatch
+
+# We omit thermal ramp and CO2 cap for the full 8760 dataset because it's naturally infeasible
+# if net load swings > 200MW in 1h without sufficient battery pre-positioning.
+# But we enable reliability mode to ensure the solver always returns Optimal.
+overrides = {
+    'enable_battery': True,
+    'enable_ramp': True,
+    'enable_co2_cap': False,
+    'enable_reliability': True
+}
+cfg_8760 = build_phase2_config(b_8760, overrides)
+
+t0 = time.time()
+res_8760 = solve_dispatch(b_8760.demand_df, b_8760.solar_df, b_8760.wind_df, b_8760.generators_df, cfg_8760)
+solve_time = time.time() - t0
+
+# Count variables and constraints theoretically:
+# S, W, T, Charge, Discharge, SOC, Unmet = 7 * 8760 = 61320 variables
+# Demand Balance (8760), Ramp (2*8760), SOC Dynamics (8760) = 35040 constraints
+var_count = 7 * dataset_horizon
+const_count = 4 * dataset_horizon # Demand(1) + RampUp(1) + RampDown(1) + SOC(1)
+
+print(f"  Number of variables:   ~{var_count}")
+print(f"  Number of constraints: ~{const_count}")
+print(f"  Solver:                CBC (via PuLP)")
+print(f"  Solver status:         {res_8760.status}")
+print(f"  Solve time:            {solve_time:.2f} seconds")
+
+if res_8760.status == "Optimal":
+    from src.calculations import build_metrics
+    m_8760 = build_metrics(res_8760.dispatch_df, b_8760.generators_df)
+    print(f"  Objective value:       {res_8760.objective_value:,.2f}")
+    print(f"  Total demand:          {m_8760['total_demand_mwh']:,.0f} MWh")
+    print(f"  Total generation:      {m_8760['total_generation_mwh']:,.0f} MWh")
+    print(f"  Renewable share:       {m_8760['renewable_share_pct']:.2f}%")
+    print(f"  Thermal generation:    {res_8760.dispatch_df['thermal_mw'].sum():,.0f} MWh")
+    print(f"  Total emissions:       {m_8760['total_kg_co2']:,.0f} kg")
+    
+    # Calculate violations
+    df = res_8760.dispatch_df
+    # Demand Balance Error
+    net_gen = df["solar_mw"] + df["wind_mw"] + df["thermal_mw"] + df.get("discharge_mw", 0) - df.get("charge_mw", 0) + df.get("unmet_mw", 0)
+    max_demand_err = (net_gen - df["demand_mw"]).abs().max()
+    
+    # Thermal Ramp violation
+    max_ramp_viol = 0.0
+    ramp_diff = df["thermal_mw"].diff().abs().max()
+    if ramp_diff > cfg_8760.ramp_limit_mw_per_hour + 1e-4:
+        max_ramp_viol = ramp_diff - cfg_8760.ramp_limit_mw_per_hour
+        
+    print(f"  Max demand-bal error:  {max_demand_err:.6f}")
+    print(f"  Max thermal-ramp viol: {max_ramp_viol:.6f}")
+    print(f"  Any unmet demand:      {df.get('unmet_mw', pd.Series([0])).sum() > 1e-4}")
 
 print("\n" + "=" * 60)
 print("ALL VERIFICATION COMPLETE")

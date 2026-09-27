@@ -116,6 +116,9 @@ def render_results(result, generators_df):
     if "timestamp" in df.columns and len(df) > 1000:
         st.subheader("📅 Monthly Analysis Summary")
         df_month = df.copy()
+        
+        # Ensure timestamp is datetime before dt operations
+        df_month["timestamp"] = pd.to_datetime(df_month["timestamp"])
         df_month["month"] = df_month["timestamp"].dt.to_period("M")
         
         agg_cols = {
@@ -137,5 +140,5 @@ def render_results(result, generators_df):
         st.dataframe(monthly.round(2), use_container_width=True)
         
         # Monthly bar chart
-        fig_m = px.bar(monthly, x="month", y=["solar_mw", "wind_mw", "thermal_mw"], title="Monthly Generation Mix", labels={"value": "MWh", "month": "Month"})
+        fig_m = px.bar(monthly, x="month", y=["solar_mw", "wind_mw", "thermal_mw"], title="Monthly Generation Mix", labels={"value": "MWh", "month": "Month", "variable": "Source"})
         st.plotly_chart(fig_m, use_container_width=True)

@@ -108,7 +108,11 @@ $$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot
     st.subheader("Advanced Configuration (Phase 2)")
     col_a, col_b, col_c = st.columns(3)
     enable_ramp = col_a.checkbox("Enable Thermal Ramp Constraints", value=False)
-    enable_co2 = col_b.checkbox("Enable Hourly CO₂ Cap", value=False)
+    
+    # Only allow CO2 cap if the dataset has it (e.g., 24h default)
+    has_co2_cap = bundle.co2_cap_df is not None
+    enable_co2 = col_b.checkbox("Enable Hourly CO₂ Cap", value=False, disabled=not has_co2_cap)
+    
     enable_battery = col_c.checkbox("Enable Battery Storage", value=False)
     enable_reliability = col_a.checkbox("Enable Reliability Mode (Allow Unmet Demand)", value=False)
     initial_thermal = 400.0
@@ -122,6 +126,12 @@ $$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot
         "enable_reliability": enable_reliability,
         "initial_thermal_output_mw": initial_thermal,
     }
+    
+    # Clear stale result if inputs change
+    if "last_overrides" not in st.session_state or st.session_state.last_overrides != overrides:
+        st.session_state.result = None
+        st.session_state.last_overrides = overrides
+
     from src.data_loader import build_phase2_config
     phase2_cfg = build_phase2_config(bundle, overrides)
 

@@ -96,20 +96,30 @@ def check_feasibility(demand_df, solar_df, wind_df, generators_df):
     thermal_row = generators_df[generators_df["source"] == "Thermal"]
     thermal_capacity = float(thermal_row["max_capacity_mw"].values[0])
 
+    # Vectorized operations for speed on 8,760-hour datasets
+    df = demand_df.copy()
+    
+    # Align hours to ensure correct merging
+    solar_mapped = solar_df.set_index("hour")["solar_available_mw"]
+    wind_mapped = wind_df.set_index("hour")["wind_available_mw"]
+    
+    df["solar_avail"] = df["hour"].map(solar_mapped)
+    df["wind_avail"] = df["hour"].map(wind_mapped)
+    
+    df["max_gen"] = df["solar_avail"] + df["wind_avail"] + thermal_capacity
+    df["shortfall"] = df["demand_mw"] - df["max_gen"]
+    
+    # Filter infeasible hours
+    infeasible = df[df["shortfall"] > 1e-6]
+    
     infeasible_hours = []
-    for _, row in demand_df.iterrows():
-        h = int(row["hour"])
-        demand = float(row["demand_mw"])
-        solar_avail = float(solar_df[solar_df["hour"] == h]["solar_available_mw"].values[0])
-        wind_avail = float(wind_df[wind_df["hour"] == h]["wind_available_mw"].values[0])
-        max_gen = solar_avail + wind_avail + thermal_capacity
-        if max_gen < demand - 1e-6:
-            infeasible_hours.append({
-                "hour": h,
-                "demand": demand,
-                "max_available": max_gen,
-                "shortfall": demand - max_gen,
-            })
+    for _, row in infeasible.iterrows():
+        infeasible_hours.append({
+            "hour": int(row["hour"]),
+            "demand": float(row["demand_mw"]),
+            "max_available": float(row["max_gen"]),
+            "shortfall": float(row["shortfall"]),
+        })
     return infeasible_hours
 
 
