@@ -66,3 +66,25 @@ def render_dashboard(result, generators_df):
         st.metric("Renewable Generation", f"{metrics['renewable_generation_mwh']:,.0f} MWh")
     with col7:
         st.metric("Total Generation", f"{metrics['total_generation_mwh']:,.0f} MWh")
+
+    # Phase 2 metrics row (only show if present)
+    has_p2_metrics = any(k in metrics for k in ["total_unmet_mwh", "peak_soc_mwh", "max_shadow_price"])
+    if has_p2_metrics:
+        st.subheader("Advanced Metrics (Phase 2)")
+        col8, col9, col10, col11 = st.columns(4)
+        
+        unmet = metrics.get("total_unmet_mwh", 0.0)
+        col8.metric("Unmet Demand", f"{unmet:,.1f} MWh", 
+                   delta="⚠️ Penalty active" if unmet > 0 else None, delta_color="inverse")
+        
+        if "peak_soc_mwh" in metrics:
+            col9.metric("Peak Battery SOC", f"{metrics['peak_soc_mwh']:,.1f} MWh")
+            col10.metric("Total Discharge", f"{metrics.get('total_discharge_mwh', 0.0):,.1f} MWh")
+        else:
+            col9.metric("Battery Storage", "Disabled")
+            col10.metric("Total Discharge", "N/A")
+            
+        if "max_shadow_price" in metrics:
+            col11.metric("Max Shadow Price", f"₹{metrics['max_shadow_price']:,.2f}/MWh")
+        else:
+            col11.metric("Max Shadow Price", "N/A")

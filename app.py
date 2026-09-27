@@ -69,29 +69,29 @@ elif page == "🔬 Optimization":
 - $S_t$ = Solar generation (MWh)
 - $W_t$ = Wind generation (MWh)  
 - $T_t$ = Thermal generation (MWh)
+- **Phase 2 Variables:** $C_t$ (Charge), $D_t$ (Discharge), $SOC_t$ (State of Charge), $Unmet_t$ (Unmet Demand)
 
 **Objective Function (Minimize)**:
-$$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t \right)$$
-
-where $C_s, C_w, C_{th}$ are the cost per MWh for solar, wind, and thermal.
+$$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + P_{unmet} \cdot Unmet_t \right)$$
 
 **Constraints**:
 
 | Constraint | Equation | Type |
 |-----------|----------|------|
-| Demand Balance | $S_t + W_t + T_t = D_t$ | Equality |
+| Demand Balance | $S_t + W_t + T_t + D_t - C_t + Unmet_t = Demand_t$ | Equality |
 | Solar Availability | $S_t \leq \text{SolarAvail}_t$ | Upper bound |
 | Wind Availability | $W_t \leq \text{WindAvail}_t$ | Upper bound |
 | Thermal Capacity | $T_t \leq \text{ThermalCap}$ | Upper bound |
-| Non-Negativity | $S_t, W_t, T_t \geq 0$ | Lower bound |
-
-**Number of decision variables:** 72 (24 × 3 sources)  
-**Number of constraints:** 24 hourly demand-balance equality constraints, with variable bounds enforcing non-negativity, renewable availability, and thermal capacity.
+| Thermal Ramp | $\|T_t - T_{t-1}\| \leq \text{RampLimit}$ | Phase 2 |
+| Hourly CO2 Cap | $T_t \cdot \text{CO2}_{th} \leq \text{CO2Cap}_t$ | Phase 2 |
+| Battery Dynamics | $SOC_t = SOC_{t-1} + \eta_c C_t - D_t / \eta_d$ | Phase 2 |
+| Non-Negativity | $S_t, W_t, T_t, C_t, D_t, Unmet_t \geq 0$ | Lower bound |
         """)
 
     bundle = st.session_state.bundle
 
     # Validation check
+    from src.validation import validate_co2_cap, validate_battery_config, validate_ramp_config
     validation = validate_data(
         bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df
     )
@@ -101,12 +101,48 @@ where $C_s, C_w, C_{th}$ are the cost per MWh for solar, wind, and thermal.
             st.error(f"- {err}")
         st.stop()
 
+    # Phase 2 UI Config
+    st.subheader("Advanced Configuration (Phase 2)")
+    col_a, col_b, col_c = st.columns(3)
+    enable_ramp = col_a.checkbox("Enable Thermal Ramp Constraints", value=False)
+    enable_co2 = col_b.checkbox("Enable Hourly CO₂ Cap", value=False)
+    enable_battery = col_c.checkbox("Enable Battery Storage", value=False)
+    enable_reliability = col_a.checkbox("Enable Reliability Mode (Allow Unmet Demand)", value=False)
+    initial_thermal = 400.0
+    if enable_ramp:
+        initial_thermal = col_b.number_input("Initial Thermal Output (MW)", min_value=0.0, value=400.0)
+
+    overrides = {
+        "enable_ramp": enable_ramp,
+        "enable_co2_cap": enable_co2,
+        "enable_battery": enable_battery,
+        "enable_reliability": enable_reliability,
+        "initial_thermal_output_mw": initial_thermal,
+    }
+    from src.data_loader import build_phase2_config
+    phase2_cfg = build_phase2_config(bundle, overrides)
+
+    # Validate Phase 2 Config
+    p2_errors = []
+    if enable_co2:
+        p2_errors += validate_co2_cap(bundle.co2_cap_df)
+    if enable_battery:
+        p2_errors += validate_battery_config(phase2_cfg)
+    if enable_ramp:
+        p2_errors += validate_ramp_config(phase2_cfg, bundle.generators_df)
+    
+    if p2_errors:
+        st.error("❌ Phase 2 Configuration Validation Failed:")
+        for err in p2_errors:
+            st.error(f"- {err}")
+        st.stop()
+
     # Feasibility check
     st.subheader("Pre-Optimization Feasibility Check")
     infeasible_hours = check_feasibility(
         bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df
     )
-    if infeasible_hours:
+    if infeasible_hours and not enable_reliability and not enable_battery:
         st.warning(f"⚠️ {len(infeasible_hours)} hour(s) may be infeasible before optimization:")
         for h in infeasible_hours:
             st.warning(
@@ -114,6 +150,8 @@ where $C_s, C_w, C_{th}$ are the cost per MWh for solar, wind, and thermal.
                 f"Max Available={h['max_available']:.0f} MW, "
                 f"Shortfall={h['shortfall']:.0f} MW"
             )
+    elif infeasible_hours:
+        st.info(f"ℹ️ {len(infeasible_hours)} hour(s) have demand exceeding generation capacity, but Battery or Reliability mode might resolve it.")
     else:
         st.success("✅ All 24 hours are pre-feasibility checked: supply can meet demand.")
 
@@ -122,7 +160,7 @@ where $C_s, C_w, C_{th}$ are the cost per MWh for solar, wind, and thermal.
         with st.spinner("Solving LP with CBC solver..."):
 
             result = solve_dispatch(
-                bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df
+                bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df, phase2_cfg
             )
             st.session_state.result = result
 
@@ -145,5 +183,5 @@ elif page == "📈 Results":
 elif page == "🔄 Scenario Analysis":
     bundle = st.session_state.bundle
     render_scenario_analysis(
-        bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df
+        bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df, bundle.co2_cap_df
     )

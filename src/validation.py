@@ -225,3 +225,65 @@ def _check_availability_vs_capacity(avail_df, generators_df, source_name, avail_
                 f"{source_name} availability ({max_avail:.1f} MW) exceeds installed capacity ({capacity:.1f} MW) in {len(exceeded)} hour(s)."
             )
     return errors
+
+
+def validate_co2_cap(co2_cap_df):
+    """Validate co2_cap.csv data. Returns list of error strings."""
+    errors = []
+    if co2_cap_df is None:
+        errors.append("co2_cap: DataFrame is None.")
+        return errors
+    col_errors = _check_columns(co2_cap_df, ["hour", "co2_cap_kg"], "co2_cap")
+    errors += col_errors
+    if col_errors:
+        return errors
+    num_errors = _check_numeric(co2_cap_df, "co2_cap_kg", "co2_cap")
+    errors += num_errors
+    if num_errors:
+        return errors
+    errors += _check_hours(co2_cap_df, "hour", "co2_cap")
+    errors += _check_non_negative(co2_cap_df, "co2_cap_kg", "co2_cap_kg")
+    errors += _check_no_missing(co2_cap_df, ["hour", "co2_cap_kg"], "co2_cap")
+    errors += _check_no_duplicates(co2_cap_df, "hour", "co2_cap")
+    return errors
+
+
+def validate_battery_config(cfg):
+    """Validate Phase2Config battery parameters. Returns list of error strings."""
+    errors = []
+    if cfg.battery_capacity_mwh <= 0:
+        errors.append("battery: capacity_mwh must be > 0.")
+    if cfg.charge_rate_max_mw <= 0:
+        errors.append("battery: charge_rate_max_mw must be > 0.")
+    if cfg.discharge_rate_max_mw <= 0:
+        errors.append("battery: discharge_rate_max_mw must be > 0.")
+    if not (0 < cfg.charge_efficiency <= 1):
+        errors.append("battery: charge_efficiency must be in (0, 1].")
+    if not (0 < cfg.discharge_efficiency <= 1):
+        errors.append("battery: discharge_efficiency must be in (0, 1].")
+    if cfg.min_soc_mwh < 0:
+        errors.append("battery: min_soc_mwh must be >= 0.")
+    if cfg.max_soc_mwh <= cfg.min_soc_mwh:
+        errors.append("battery: max_soc_mwh must be > min_soc_mwh.")
+    if cfg.max_soc_mwh > cfg.battery_capacity_mwh:
+        errors.append("battery: max_soc_mwh must be <= capacity_mwh.")
+    if cfg.initial_soc_mwh < cfg.min_soc_mwh:
+        errors.append("battery: initial_soc_mwh must be >= min_soc_mwh.")
+    if cfg.initial_soc_mwh > cfg.max_soc_mwh:
+        errors.append("battery: initial_soc_mwh must be <= max_soc_mwh.")
+    return errors
+
+
+def validate_ramp_config(cfg, generators_df):
+    """Validate Phase2Config ramp parameters. Returns list of error strings."""
+    errors = []
+    if cfg.ramp_limit_mw_per_hour <= 0:
+        errors.append("ramp: ramp_limit_mw_per_hour must be > 0.")
+    thermal_row = generators_df[generators_df["source"] == "Thermal"]
+    if not thermal_row.empty:
+        thermal_capacity = float(thermal_row["max_capacity_mw"].values[0])
+        if cfg.initial_thermal_output_mw < 0:
+            errors.append("ramp: initial_thermal_output_mw must be >= 0.")
+        if cfg.initial_thermal_output_mw > thermal_capacity:
+            errors.append(f"ramp: initial_thermal_output_mw ({cfg.initial_thermal_output_mw}) must be <= thermal capacity ({thermal_capacity}).")
+    return errors

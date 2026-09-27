@@ -115,5 +115,39 @@ print(f"  dispatch_df is None:    {inf_result.dispatch_df is None} (expect: True
 print(f"  total_cost is None:     {inf_result.total_cost is None} (expect: True)")
 
 print("\n" + "=" * 60)
+print("PHASE 2 VERIFICATION")
+print("=" * 60)
+
+from src.scenarios import (
+    run_phase2_extended_baseline,
+    run_phase2_tight_co2,
+    run_phase2_co2_with_battery,
+    run_phase2_insufficient_battery,
+    run_phase2_tight_ramp,
+    run_phase2_relaxed_ramp,
+    run_phase2_battery_only,
+)
+
+print("\n[10] PHASE 2 SCENARIOS")
+p2_scenarios = {
+    "P2 Baseline": run_phase2_extended_baseline(b.demand_df, b.solar_df, b.wind_df, b.generators_df, b.co2_cap_df),
+    "P2 Tight CO2 (No Batt)": run_phase2_tight_co2(b.demand_df, b.solar_df, b.wind_df, b.generators_df, b.co2_cap_df),
+    "P2 Tight CO2 + Battery": run_phase2_co2_with_battery(b.demand_df, b.solar_df, b.wind_df, b.generators_df, b.co2_cap_df),
+    "P2 Insuff. Battery": run_phase2_insufficient_battery(b.demand_df, b.solar_df, b.wind_df, b.generators_df, b.co2_cap_df),
+    "P2 Tight Ramp": run_phase2_tight_ramp(b.demand_df, b.solar_df, b.wind_df, b.generators_df),
+    "P2 Relaxed Ramp": run_phase2_relaxed_ramp(b.demand_df, b.solar_df, b.wind_df, b.generators_df),
+    "P2 Battery Only": run_phase2_battery_only(b.demand_df, b.solar_df, b.wind_df, b.generators_df),
+}
+
+for name, sr in p2_scenarios.items():
+    if sr.status == "Optimal":
+        m2 = sr.metrics
+        unmet = m2.get('total_unmet_mwh', 0.0)
+        unmet_str = f" unmet={unmet:.1f}" if unmet > 0 else ""
+        print(f"  {name:25s}: OPTIMAL  cost={m2['total_cost']:>10,.0f}  CO2={m2['total_kg_co2']:>10,.0f}{unmet_str}")
+    else:
+        print(f"  {name:25s}: {sr.status}")
+
+print("\n" + "=" * 60)
 print("ALL VERIFICATION COMPLETE")
 print("=" * 60)

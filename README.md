@@ -40,26 +40,34 @@ For each hour $t = 0, 1, \ldots, 23$:
 - $S_t$ = Solar generation (MWh)
 - $W_t$ = Wind generation (MWh)
 - $T_t$ = Thermal generation (MWh)
+- **Phase 2 Extended Variables:**
+  - $C_t$ = Battery charge (MWh)
+  - $D_t$ = Battery discharge (MWh)
+  - $SOC_t$ = Battery State of Charge (MWh)
+  - $Unmet_t$ = Unmet Demand (MWh, optional)
 
-All variables are **continuous** and **non-negative** (LP, not MIP).
+All variables are **continuous** and **non-negative** (LP, not MIP). To preserve pure LP, there are no binary variables to prevent simultaneous charge/discharge (the solver naturally avoids it due to efficiency losses and costs).
 
 ### Objective Function (Minimize)
 
-$$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t \right)$$
+$$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + P_{unmet} \cdot Unmet_t \right)$$
 
-Where $C_s$, $C_w$, $C_{th}$ are the cost per MWh for each source.
+Where $C_s, C_w, C_{th}$ are the costs per MWh. $P_{unmet}$ is a heavy penalty for unmet demand (e.g., 50,000 ₹/MWh).
 
 ### Constraints
 
 | Constraint | Equation | Type |
 |---|---|---|
-| Demand Balance | $S_t + W_t + T_t = D_t \quad \forall t$ | Equality |
+| Demand Balance | $S_t + W_t + T_t + D_t - C_t + Unmet_t = Demand_t \quad \forall t$ | Equality |
 | Solar Availability | $S_t \leq \text{SolarAvail}_t \quad \forall t$ | Upper bound |
 | Wind Availability | $W_t \leq \text{WindAvail}_t \quad \forall t$ | Upper bound |
 | Thermal Capacity | $T_t \leq \text{ThermalCap} \quad \forall t$ | Upper bound |
-| Non-Negativity | $S_t, W_t, T_t \geq 0 \quad \forall t$ | Lower bound |
+| Thermal Ramp | $\|T_t - T_{t-1}\| \leq \text{RampLimit}$ | Phase 2 |
+| Hourly CO₂ Cap | $T_t \cdot \text{CO2}_{th} \leq \text{CO2Cap}_t$ | Phase 2 |
+| Battery Dynamics | $SOC_t = SOC_{t-1} + \eta_c C_t - D_t / \eta_d$ | Phase 2 |
+| Non-Negativity | All variables $\geq 0 \quad \forall t$ | Lower bound |
 
-**Model size:** 72 decision variables, 24 hourly demand-balance equality constraints, with variable bounds enforcing non-negativity, renewable availability, and thermal capacity.
+**Note on Shadow Prices:** The dual values (shadow prices) of the demand-balance constraints are extracted, representing the marginal cost of energy at each hour.
 
 ---
 
@@ -69,29 +77,27 @@ Where $C_s$, $C_w$, $C_{th}$ are the cost per MWh for each source.
 - ✅ LP optimization using PuLP + CBC solver
 - ✅ Pre-optimization feasibility check (per-hour capacity vs demand)
 - ✅ Data validation (columns, types, ranges, duplicates, availability vs capacity)
-- ✅ Post-solve constraint verification (demand balance, bounds, cost match)
+- ✅ Post-solve constraint verification (demand balance, bounds, cost match, phase 2 checks)
+- ✅ Inter-temporal constraints (Thermal Ramp limits, Battery State of Charge)
 
 ### Results & Analytics
-- Optimal hourly dispatch table (Solar, Wind, Thermal)
-- Total minimum generation cost
-- Renewable share (%) = (Solar + Wind) / Total × 100
-- Thermal dependency (%) = Thermal / Total × 100
+- Optimal hourly dispatch table (Solar, Wind, Thermal, Battery, Unmet)
+- Total minimum generation cost, Renewable share, Thermal dependency
 - CO₂ emissions (kg) by source and total
 - Source-wise cost breakdown
+- Hourly Shadow Prices (Marginal Cost)
+- Battery state of charge (SOC) dynamics
 
-### Scenario Analysis (5 scenarios)
-1. **Baseline** — Normal operating conditions
-2. **High Demand** — Demand increased by 20% (may become infeasible)
-3. **Low Solar** — Solar availability reduced to 50%
-4. **High Thermal Cost** — Thermal cost increased by 30%
-5. **Increased Renewable Capacity** — Solar capacity +200 MW
+### Scenario Analysis (12 scenarios)
+- **Phase 1 Scenarios**: Baseline, High Demand, Low Solar, High Thermal Cost, Increased Renewable
+- **Phase 2 Scenarios**: Extended Baseline, Tight Evening CO₂ Cap, Tight CO₂ + Battery, Insufficient Battery, Tight Ramp, Relaxed Ramp, Battery Arbitrage Only
 
 ### UI (Streamlit)
-- Dashboard with 4 KPI cards
-- Input Configuration (default dataset or CSV upload + generator editor)
-- Optimization page with full mathematical formulation displayed
-- Results page with dispatch table and 5 interactive Plotly charts
-- Scenario Analysis with comparison table and charts
+- Dashboard with 4 core KPIs and 4 advanced Phase 2 metrics
+- Input Configuration with Phase 2 data overrides
+- Optimization page with Phase 2 feature toggles and mathematical formulation
+- Results page with 7 interactive Plotly charts (including SOC and Shadow Prices)
+- Scenario Analysis with Phase 1 vs Phase 2 comparative analysis
 
 ---
 
@@ -147,14 +153,14 @@ The app will open at `http://localhost:8501`.
 ### Recommended Demo Flow
 
 1. **Dashboard** — View KPI summary (run optimization first)
-2. **Optimization** → View LP formulation → Click "Run LP Optimization"
-3. **Results** → View dispatch table and all charts
-4. **Scenario Analysis** → Select scenarios → Run → Compare
+2. **Optimization** → Toggle Phase 2 Advanced Options → Run LP
+3. **Results** → View dispatch table, Battery SOC, and Shadow Prices
+4. **Scenario Analysis** → Select Phase 2 scenarios → Run → Compare battery impact
 
 ### Run Tests
 
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/ -v -W ignore::DeprecationWarning
 ```
 
 ### Run Standalone Verification
@@ -167,114 +173,47 @@ python verify_lp.py
 
 ## 8. Dataset Schema
 
-### `data/demand.csv`
+*Original Phase 1 schema is preserved.*
 
+### `data/co2_cap.csv` (Phase 2)
 | Column | Type | Description |
 |---|---|---|
 | `hour` | int (0–23) | Hour of the day |
-| `demand_mw` | float ≥ 0 | Electricity demand (MWh for 1-hour interval) |
+| `co2_cap_kg` | float ≥ 0 | Maximum allowable CO₂ emissions (kg) in that hour |
 
-### `data/solar_availability.csv`
-
-| Column | Type | Description |
-|---|---|---|
-| `hour` | int (0–23) | Hour of the day |
-| `solar_available_mw` | float ≥ 0 | Available solar generation (≤ installed capacity) |
-
-### `data/wind_availability.csv`
-
-| Column | Type | Description |
-|---|---|---|
-| `hour` | int (0–23) | Hour of the day |
-| `wind_available_mw` | float ≥ 0 | Available wind generation (≤ installed capacity) |
-
-### `data/generators.csv`
-
-| Column | Type | Description |
-|---|---|---|
-| `source` | str | Generator name (`Solar`, `Wind`, `Thermal`) |
-| `max_capacity_mw` | float > 0 | Installed capacity (MW) |
-| `cost_per_mwh` | float ≥ 0 | Generation cost (₹/MWh) |
-| `co2_per_mwh` | float ≥ 0 | CO₂ emission factor (kg/MWh) |
+### `data/battery.csv` (Phase 2)
+Contains key-value pairs for `capacity_mwh`, `charge_rate_max_mw`, `discharge_rate_max_mw`, `charge_efficiency`, `discharge_efficiency`, `initial_soc_mwh`, `min_soc_mwh`, `max_soc_mwh`.
 
 ---
 
 ## 9. Default Dataset Assumptions
 
 This project uses a **synthetic demonstration dataset** inspired by typical South Asian grid characteristics.
-It does **not** represent actual measured grid data.
 
-### Generator Parameters
-
-| Source | Capacity (MW) | Cost (₹/MWh) | CO₂ (kg/MWh) |
-|---|---|---|---|
-| Solar | 400 | 10.00 | 0 |
-| Wind | 300 | 15.00 | 0 |
-| Thermal | 800 | 85.00 | 820 |
-
-**Cost rationale:** Solar and Wind marginal costs are near-zero (no fuel cost). Thermal represents
-coal/gas-based generation. The ₹ symbol is used for illustration; units are consistent internally.
-
-**CO₂ rationale:** Solar and Wind have zero direct emissions. 820 kg/MWh for Thermal is representative
-of a mixed coal/gas fleet.
-
-### Demand Profile
-
-- Night hours (0–5): 545–620 MW (low residential/industrial load)
-- Morning ramp (6–9): 700–850 MW
-- Midday (10–15): 810–840 MW
-- Evening peak (16–20): 870–950 MW (highest at hour 19: 950 MW)
-- Late evening (21–23): 700–850 MW
-
-### Solar Profile
-
-- Night (0–5, 19–23): 0 MW
-- Peak at hour 12: 400 MW
-- Bell-shaped curve across hours 6–18
-
-### Wind Profile
-
-- Variable between 110–195 MW throughout the day
-- Higher at night and early morning
+### Phase 2 Configurations
+- **Battery**: 400 MWh capacity, 100 MW charge/discharge rate, 90% efficiency.
+- **Ramp Limit**: 200 MW/hr for Thermal generator.
+- **CO₂ Cap**: Non-binding for most hours, but constrained to 550,000 kg during evening peak (hours 17-20) to demonstrate inter-temporal battery pre-positioning.
 
 ---
 
 ## 10. LP Model Results (Default Dataset)
 
-```
-Status:             Optimal
-Total Cost:         ₹1,073,825
-Total Demand:       18,505 MWh
-Total Generation:   18,505 MWh
-Renewable Share:    37.34%
-Thermal Dependency: 62.66%
-CO₂ Emissions:      9,507,900 kg
-```
-
-**Key LP observations:**
-- The optimizer always dispatches full available solar (cheapest at ₹10/MWh) when possible
-- Wind is dispatched fully at all hours (₹15/MWh < ₹85/MWh thermal)
-- Thermal fills the residual demand at all hours
-- Evening peak (hours 17–20) requires maximum thermal contribution
+Phase 2 results depend heavily on the advanced toggles selected. With all Phase 2 features (Battery + CO₂ Cap) enabled:
+- The battery **charges** during midday (hours 10-14) using excess cheap renewable energy.
+- The battery **discharges** during the evening peak (hours 17-20) when the CO₂ cap restricts thermal output.
+- Inter-temporal optimization successfully avoids unmet demand.
 
 ---
 
 ## 11. Scenario Descriptions
 
-| Scenario | Modification | Expected Effect |
+| Scenario | Focus | Expected Effect |
 |---|---|---|
-| Baseline | None | Reference solution |
-| High Demand (+20%) | Demand × 1.20 | May become infeasible; higher thermal use |
-| Low Solar (−50%) | Solar availability × 0.50 | More thermal, higher cost and CO₂ |
-| High Thermal Cost (+30%) | Thermal cost × 1.30 | Dispatch unchanged (no cheaper alternative), higher total cost |
-| Increased Renewable (+200 MW Solar) | Solar capacity 400→600 MW | More solar, lower cost and CO₂ |
-
-**Note on Increased Renewable Capacity:** This scenario assumes that the newly added solar capacity
-has the same normalized hourly generation profile as the existing capacity (scaled proportionally).
-
-**Note:** High Demand (20% increase) becomes **infeasible** with the default dataset because
-demand at peak hours (e.g., 950 × 1.20 = 1,140 MW) exceeds available capacity
-(0 solar + 180 wind + 800 thermal = 980 MW). This is correctly detected and reported.
+| P2 Tight CO₂ (No Batt) | Strict emissions | Infeasible/unmet demand without storage |
+| P2 Tight CO₂ + Battery | Inter-temporal | Optimal; battery shifts energy to meet cap |
+| P2 Tight Ramp | Flexibility limit | Model pre-positions thermal output early |
+| P2 Battery Only | Arbitrage | Battery smooths generation costs |
 
 ---
 
@@ -287,29 +226,30 @@ RenewOpt/
 │
 ├── data/
 │   ├── demand.csv                  # 24-hour demand profile
-│   ├── solar_availability.csv      # Hourly solar availability
-│   ├── wind_availability.csv       # Hourly wind availability
-│   └── generators.csv              # Generator parameters
+│   ├── solar_availability.csv      
+│   ├── wind_availability.csv       
+│   ├── generators.csv              # Generator parameters
+│   ├── co2_cap.csv                 # Hourly CO2 emission caps
+│   └── battery.csv                 # Battery storage specifications
 │
 ├── src/
-│   ├── __init__.py
-│   ├── data_loader.py              # Load default or uploaded CSVs
+│   ├── data_loader.py              # Load datasets + phase 2 configs
 │   ├── validation.py               # Input validation layer
-│   ├── optimizer.py                # LP formulation and PuLP solver
-│   ├── calculations.py             # Derived metrics (cost, renewable%, CO₂)
-│   └── scenarios.py                # Scenario engine (5 scenarios)
+│   ├── optimizer.py                # Core LP formulation (Phase 1 + 2)
+│   ├── calculations.py             # Derived metrics
+│   └── scenarios.py                # Scenario definitions
 │
 ├── components/
-│   ├── __init__.py
 │   ├── dashboard.py                # Dashboard KPI page
-│   ├── input_config.py             # Input configuration page
+│   ├── input_config.py             # Input configuration
 │   ├── results.py                  # Results + charts page
-│   └── scenario_analysis.py       # Scenario comparison page
+│   └── scenario_analysis.py        # Scenario comparison page
 │
 ├── tests/
-│   ├── test_optimizer.py           # 9 optimizer tests (LP correctness)
-│   ├── test_validation.py          # 6 validation tests
-│   └── test_calculations.py       # 7 metrics/calculations tests
+│   ├── test_optimizer.py           # Base optimizer tests
+│   ├── test_validation.py          # Data validation tests
+│   ├── test_calculations.py        # Metrics tests
+│   └── test_phase2.py              # 36 Advanced Phase 2 integration tests
 │
 ├── verify_lp.py                    # Standalone mathematical verification
 ├── requirements.txt
@@ -324,19 +264,18 @@ RenewOpt/
 - `test_validation.py`: 11 tests
 - `test_optimizer.py`: 8 tests
 - `test_calculations.py`: 7 tests
+- `test_phase2.py`: 36 tests
 
-**Total: 26 tests**
+**Total: 62 tests**
 
-**Verified result: 26/26 tests passing**
+**Verified result: 62/62 tests passing**
 
 ---
 
 ## 14. Limitations
 
-- **No storage**: Battery storage is not modeled (future extension)
 - **No transmission**: Single-node model; no network constraints
 - **Deterministic**: Renewable availability is fixed (no stochastic uncertainty)
-- **No ramp constraints**: Thermal dispatch can change freely between hours
 - **Synthetic data**: Default dataset is not real-world grid measurements
 - **No unit commitment**: On/off decisions not modeled (LP only, no integer variables)
 - **No AC power flow**: Electrical engineering constraints not modeled
@@ -346,7 +285,6 @@ RenewOpt/
 ## 15. Future Scope
 
 - Stochastic optimization for uncertain renewable availability
-- Battery energy storage (charging/discharging variables + state-of-charge constraints)
 - Multi-objective optimization (cost vs. emissions trade-off with Pareto frontier)
 - Transmission network constraints (DC power flow)
 - Multi-node dispatch
