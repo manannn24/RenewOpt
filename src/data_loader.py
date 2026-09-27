@@ -40,6 +40,40 @@ def load_default_data() -> DataBundle:
         battery_df=battery_df,
     )
 
+def load_8760_data() -> DataBundle:
+    """Load the full-year 8,760-hour dataset."""
+    dir_8760 = DATA_DIR.parent / "data_8760"
+    
+    demand_df = pd.read_csv(dir_8760 / "demand.csv")
+    solar_df = pd.read_csv(dir_8760 / "solar_availability.csv")
+    wind_df = pd.read_csv(dir_8760 / "wind_availability.csv")
+    generators_df = pd.read_csv(dir_8760 / "generators.csv")
+    
+    # We must replace repeating `hour` (0-23) with a strictly chronological t=0..8759
+    for df in [demand_df, solar_df, wind_df]:
+        if "hour" in df.columns:
+            df.rename(columns={"hour": "hour_of_day"}, inplace=True)
+        df["hour"] = range(len(df))
+
+    # Read CO2 caps (not in 8760 by default, let's copy behavior from default but stretch it if needed, 
+    # but the simplest is just use None, so the user can configure a flat cap via UI or we use battery_df)
+    co2_cap_df = None
+    
+    # We can reuse the existing battery parameter CSV since it has no time dimension
+    battery_df = None
+    battery_path = DATA_DIR / "battery.csv"
+    if battery_path.exists():
+        battery_df = pd.read_csv(battery_path)
+        
+    return DataBundle(
+        demand_df=demand_df,
+        solar_df=solar_df,
+        wind_df=wind_df,
+        generators_df=generators_df,
+        co2_cap_df=co2_cap_df,
+        battery_df=battery_df,
+    )
+
 def load_from_uploads(
     demand_file,
     solar_file,

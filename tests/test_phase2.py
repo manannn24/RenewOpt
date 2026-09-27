@@ -236,7 +236,10 @@ class TestCO2CapValidation:
 
     def test_missing_hour_co2_cap(self):
         """CO2 cap with missing hour is rejected."""
-        df = pd.DataFrame({"hour": list(range(23)), "co2_cap_kg": [500000] * 23})
+        # Create a dataframe with 24 hours but missing hour 10
+        hours = list(range(24))
+        hours.remove(10)
+        df = pd.DataFrame({"hour": hours, "co2_cap_kg": [500000] * 23})
         errors = validate_co2_cap(df)
         assert any("missing hours" in e.lower() for e in errors)
 

@@ -149,17 +149,21 @@ def _check_hours(df, col, name):
         return errors
         
     # Check for out-of-range hours (extra/invalid)
-    invalid = df[~df[col].isin(range(24))]
+    num_rows = len(df)
+    valid_range = set(range(num_rows))
+    
+    invalid = df[~df[col].isin(valid_range)]
     if not invalid.empty:
-        bad = invalid[col].tolist()
-        errors.append(f"{name}: Hour values must be 0-23. Found: {bad}")
+        # Just report first few if there are many
+        bad = invalid[col].head(5).tolist()
+        errors.append(f"{name}: Hour values must be 0-{num_rows-1}. Found out of range: {bad}...")
         
-    # Check for complete 0-23 hour set (missing hours)
-    expected_hours = set(range(24))
+    # Check for complete sequence (missing hours)
     actual_hours = set(df[col].dropna().astype(int))
-    missing_hours = expected_hours - actual_hours
+    missing_hours = valid_range - actual_hours
     if missing_hours:
-        errors.append(f"{name}: Missing hours in dataset: {sorted(list(missing_hours))}")
+        missing_sample = sorted(list(missing_hours))[:5]
+        errors.append(f"{name}: Missing hours in dataset ({len(missing_hours)}). E.g., {missing_sample}...")
         
     return errors
 

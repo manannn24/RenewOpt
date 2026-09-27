@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from src.data_loader import load_default_data, DataBundle
+from src.data_loader import load_default_data, load_8760_data, DataBundle
 from src.validation import validate_data
 
 def render_input_config() -> DataBundle:
@@ -9,15 +9,20 @@ def render_input_config() -> DataBundle:
 
     data_source = st.radio(
         "Select data source:",
-        ["Default Dataset", "Upload Custom CSVs"],
+        ["Default Dataset (24 hours)", "Full Year Dataset (8760 hours)", "Upload Custom CSVs"],
         horizontal=True,
     )
 
     bundle = None
 
-    if data_source == "Default Dataset":
+    if data_source == "Default Dataset (24 hours)":
         st.info("Using bundled 24-hour synthetic demonstration dataset.")
         bundle = load_default_data()
+    elif data_source == "Full Year Dataset (8760 hours)":
+        st.info("Using full-year 8,760-hour dataset. Optimization may take a few moments.")
+        bundle = load_8760_data()
+        
+    if data_source in ["Default Dataset (24 hours)", "Full Year Dataset (8760 hours)"]:
         # Show preview tables
         with st.expander("📋 Demand Data (first 6 hours)"):
             st.dataframe(bundle.demand_df.head(6), use_container_width=True)

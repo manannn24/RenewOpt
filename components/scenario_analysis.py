@@ -128,13 +128,17 @@ def render_scenario_analysis(demand_df, solar_df, wind_df, generators_df, co2_ca
             selected_for_dispatch = st.selectbox("View dispatch for scenario:", list(optimal_results.keys()))
             sr = optimal_results[selected_for_dispatch]
             df = sr.result.dispatch_df
+            
+            x_col = df["timestamp"] if "timestamp" in df.columns else df["hour"]
+            x_title = "Time" if "timestamp" in df.columns else "Hour"
+            
             fig_disp = go.Figure()
-            fig_disp.add_trace(go.Bar(x=df["hour"], y=df["solar_mw"], name="Solar", marker_color="#FFA500"))
-            fig_disp.add_trace(go.Bar(x=df["hour"], y=df["wind_mw"], name="Wind", marker_color="#1E90FF"))
-            fig_disp.add_trace(go.Bar(x=df["hour"], y=df["thermal_mw"], name="Thermal", marker_color="#808080"))
+            fig_disp.add_trace(go.Scatter(x=x_col, y=df["solar_mw"], name="Solar", stackgroup='one', fillcolor="#FFA500", line=dict(width=0)))
+            fig_disp.add_trace(go.Scatter(x=x_col, y=df["wind_mw"], name="Wind", stackgroup='one', fillcolor="#1E90FF", line=dict(width=0)))
+            fig_disp.add_trace(go.Scatter(x=x_col, y=df["thermal_mw"], name="Thermal", stackgroup='one', fillcolor="#808080", line=dict(width=0)))
             if "discharge_mw" in df.columns:
-                fig_disp.add_trace(go.Bar(x=df["hour"], y=df["discharge_mw"], name="Battery Discharge", marker_color="#32CD32"))
+                fig_disp.add_trace(go.Scatter(x=x_col, y=df["discharge_mw"], name="Battery Discharge", stackgroup='one', fillcolor="#32CD32", line=dict(width=0)))
             if "unmet_mw" in df.columns:
-                fig_disp.add_trace(go.Bar(x=df["hour"], y=df["unmet_mw"], name="Unmet Demand", marker_color="#FF0000"))
-            fig_disp.update_layout(title=f"Hourly Dispatch: {selected_for_dispatch}", barmode="stack", xaxis_title="Hour", yaxis_title="MWh")
+                fig_disp.add_trace(go.Scatter(x=x_col, y=df["unmet_mw"], name="Unmet Demand", stackgroup='one', fillcolor="#FF0000", line=dict(width=0)))
+            fig_disp.update_layout(title=f"Dispatch (Area): {selected_for_dispatch}", barmode="stack", xaxis_title=x_title, yaxis_title="MWh")
             st.plotly_chart(fig_disp, use_container_width=True)

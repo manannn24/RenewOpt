@@ -149,5 +149,28 @@ for name, sr in p2_scenarios.items():
         print(f"  {name:25s}: {sr.status}")
 
 print("\n" + "=" * 60)
+print("PHASE 2 8760-HOUR VERIFICATION")
+print("=" * 60)
+
+from src.data_loader import load_8760_data
+print("\n[11] LOADING 8760 DATASET")
+b_8760 = load_8760_data()
+print(f"  Demand rows: {len(b_8760.demand_df)}")
+print(f"  Solar rows:  {len(b_8760.solar_df)}")
+print(f"  Wind rows:   {len(b_8760.wind_df)}")
+assert len(b_8760.demand_df) == 8760, "Must be exactly 8760 rows"
+
+print("\n[12] SOLVING 8760 BASELINE SCENARIO")
+# The 8760 optimization might take some time, so we just test the baseline
+from src.scenarios import run_baseline
+sr_8760 = run_baseline(b_8760.demand_df, b_8760.solar_df, b_8760.wind_df, b_8760.generators_df)
+print(f"  Status:       {sr_8760.status}")
+if sr_8760.status == "Optimal":
+    m_8760 = sr_8760.metrics
+    print(f"  Total cost:   {m_8760['total_cost']:,.0f}")
+    print(f"  CO2 total:    {m_8760['total_kg_co2']:,.0f} kg")
+    print(f"  Ren Share:    {m_8760['renewable_share_pct']:.2f}%")
+
+print("\n" + "=" * 60)
 print("ALL VERIFICATION COMPLETE")
 print("=" * 60)

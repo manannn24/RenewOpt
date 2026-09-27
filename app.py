@@ -64,31 +64,34 @@ elif page == "🔬 Optimization":
     st.subheader("Mathematical Model Summary")
 
     with st.expander("📐 View Full Mathematical Formulation", expanded=True):
-        st.markdown(r"""
-**Decision Variables** (for each hour $t = 0, 1, ..., 23$):
+        st.markdown(rf"""
+**Decision Variables** (for each hour $t = 0, 1, ..., N-1$):
 - $S_t$ = Solar generation (MWh)
 - $W_t$ = Wind generation (MWh)  
 - $T_t$ = Thermal generation (MWh)
 - **Phase 2 Variables:** $C_t$ (Charge), $D_t$ (Discharge), $SOC_t$ (State of Charge), $Unmet_t$ (Unmet Demand)
 
 **Objective Function (Minimize)**:
-$$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + P_{unmet} \cdot Unmet_t \right)$$
+$$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot T_t + P_{{unmet}} \cdot Unmet_t \right)$$
 
 **Constraints**:
 
 | Constraint | Equation | Type |
 |-----------|----------|------|
 | Demand Balance | $S_t + W_t + T_t + D_t - C_t + Unmet_t = Demand_t$ | Equality |
-| Solar Availability | $S_t \leq \text{SolarAvail}_t$ | Upper bound |
-| Wind Availability | $W_t \leq \text{WindAvail}_t$ | Upper bound |
-| Thermal Capacity | $T_t \leq \text{ThermalCap}$ | Upper bound |
-| Thermal Ramp | $\|T_t - T_{t-1}\| \leq \text{RampLimit}$ | Phase 2 |
-| Hourly CO2 Cap | $T_t \cdot \text{CO2}_{th} \leq \text{CO2Cap}_t$ | Phase 2 |
-| Battery Dynamics | $SOC_t = SOC_{t-1} + \eta_c C_t - D_t / \eta_d$ | Phase 2 |
+| Solar Availability | $S_t \leq \text{{SolarAvail}}_t$ | Upper bound |
+| Wind Availability | $W_t \leq \text{{WindAvail}}_t$ | Upper bound |
+| Thermal Capacity | $T_t \leq \text{{ThermalCap}}$ | Upper bound |
+| Thermal Ramp | $\|T_t - T_{{t-1}}\| \leq \text{{RampLimit}}$ | Phase 2 |
+| Hourly CO2 Cap | $T_t \cdot \text{{CO2}}_{{th}} \leq \text{{CO2Cap}}_t$ | Phase 2 |
+| Battery Dynamics | $SOC_t = SOC_{{t-1}} + \eta_c C_t - D_t / \eta_d$ | Phase 2 |
 | Non-Negativity | $S_t, W_t, T_t, C_t, D_t, Unmet_t \geq 0$ | Lower bound |
         """)
 
     bundle = st.session_state.bundle
+    dataset_length = len(bundle.demand_df)
+    
+    st.info(f"📅 Active Model Horizon: {dataset_length} hours")
 
     # Validation check
     from src.validation import validate_co2_cap, validate_battery_config, validate_ramp_config
@@ -144,16 +147,18 @@ $$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + 
     )
     if infeasible_hours and not enable_reliability and not enable_battery:
         st.warning(f"⚠️ {len(infeasible_hours)} hour(s) may be infeasible before optimization:")
-        for h in infeasible_hours:
+        for h in infeasible_hours[:10]: # cap display
             st.warning(
                 f"Hour {h['hour']}: Demand={h['demand']:.0f} MW, "
                 f"Max Available={h['max_available']:.0f} MW, "
                 f"Shortfall={h['shortfall']:.0f} MW"
             )
+        if len(infeasible_hours) > 10:
+            st.warning(f"... and {len(infeasible_hours) - 10} more.")
     elif infeasible_hours:
         st.info(f"ℹ️ {len(infeasible_hours)} hour(s) have demand exceeding generation capacity, but Battery or Reliability mode might resolve it.")
     else:
-        st.success("✅ All 24 hours are pre-feasibility checked: supply can meet demand.")
+        st.success(f"✅ All {dataset_length} hours are pre-feasibility checked: supply can meet demand.")
 
     st.divider()
     if st.button("▶️ Run LP Optimization", type="primary", use_container_width=True):
