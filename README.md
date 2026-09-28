@@ -208,7 +208,7 @@ RenewOpt/
 │   ├── input_config.py             # Input configuration
 │   ├── results.py                  # Results + monthly charts page
 │   └── scenario_analysis.py        # Scenario comparison page
-├── tests/                          # 62 unit & integration tests
+├── tests/                          # 72 unit & integration tests
 ├── verify_lp.py                    # Standalone mathematical verification
 ├── requirements.txt
 ├── README.md
@@ -223,10 +223,12 @@ RenewOpt/
 - `test_optimizer.py`: 8 tests
 - `test_calculations.py`: 7 tests
 - `test_phase2.py`: 36 tests
+- `test_8760.py`: 5 tests
+- `test_ramp_boundaries.py`: 5 tests
 
-**Total: 62 tests**
+**Total: 72 tests**
 
-**Verified result: 62/62 tests passing on the Phase 2 LP Model.**
+**Verified result: 72/72 tests passing on the Phase 2 LP Model.**
 
 ---
 
