@@ -210,14 +210,14 @@ $$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot
                             f"- **Thermal Reached**: {diag['thermal_mw']:.0f} MW (Change: {diag['thermal_change_mw']:+.0f} MW)\n"
                             f"- **Required Additional Generation (Unmet)**: {diag['unmet_mw']:.0f} MW\n"
                             f"- **Battery Storage Available?**: {'Yes' if diag['battery_available'] else 'No'}\n"
-                            f"- **Would Reliability Mode resolve this?**: Yes (it would allow the solver to meet demand using penalized slack variables)."
+                            f"- **Would Reliability Mode help?**: Yes (it makes the optimization solvable by explicitly permitting and penalizing unmet demand while retaining the ramp constraint)."
                         )
                     else:
                         st.markdown(
-                            f"**Capacity constraints make the {len(bundle.demand_df)}-hour problem infeasible.**\n"
+                            f"**Capacity constraints make the {len(bundle.demand_df)}-hour problem mathematically infeasible.**\n"
                             f"- **Most Restrictive Hour**: {diag['critical_hour']}\n"
                             f"- **Required Additional Generation (Unmet)**: {diag['unmet_mw']:.0f} MW\n"
-                            f"- **Would Reliability Mode resolve this?**: Yes"
+                            f"- **Would Reliability Mode help?**: Yes (makes it solvable via penalized unmet demand)."
                         )
         else:
             st.warning(f"⚠️ Solver Status: {result.message}")
