@@ -189,6 +189,36 @@ $$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot
                 st.warning("⚠️ Post-solve verification found issues. Check Results page.")
         elif result.status == "Infeasible":
             st.error(f"❌ LP Infeasible: {result.message}")
+            from src.diagnostic import diagnose_infeasibility
+            diag = diagnose_infeasibility(
+                bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df, phase2_cfg
+            )
+            if diag:
+                if diag.get("reason") == "marginal":
+                    st.info("The infeasibility appears marginal. Try relaxing constraints slightly.")
+                else:
+                    st.warning("### 🔍 Ramp / Capacity Infeasibility Diagnostic")
+                    if diag.get('ramp_limit_mw') is not None:
+                        st.markdown(
+                            f"**Strict thermal ramp constraints make the {len(bundle.demand_df)}-hour problem mathematically infeasible.**\n"
+                            f"Net-load volatility exceeds the thermal ramp capacity.\n\n"
+                            f"- **Configured Ramp Limit**: {diag['ramp_limit_mw']:.0f} MW/h\n"
+                            f"- **Initial Thermal Output**: {diag['initial_thermal_mw']:.0f} MW\n"
+                            f"- **Most Restrictive Hour**: Transition to Hour {diag['critical_hour']}\n"
+                            f"- **Previous Thermal**: {diag['prev_thermal_mw']:.0f} MW\n"
+                            f"- **Allowed Thermal Adjustment**: ±{diag['ramp_limit_mw']:.0f} MW\n"
+                            f"- **Thermal Reached**: {diag['thermal_mw']:.0f} MW (Change: {diag['thermal_change_mw']:+.0f} MW)\n"
+                            f"- **Required Additional Generation (Unmet)**: {diag['unmet_mw']:.0f} MW\n"
+                            f"- **Battery Storage Available?**: {'Yes' if diag['battery_available'] else 'No'}\n"
+                            f"- **Would Reliability Mode resolve this?**: Yes (it would allow the solver to meet demand using penalized slack variables)."
+                        )
+                    else:
+                        st.markdown(
+                            f"**Capacity constraints make the {len(bundle.demand_df)}-hour problem infeasible.**\n"
+                            f"- **Most Restrictive Hour**: {diag['critical_hour']}\n"
+                            f"- **Required Additional Generation (Unmet)**: {diag['unmet_mw']:.0f} MW\n"
+                            f"- **Would Reliability Mode resolve this?**: Yes"
+                        )
         else:
             st.warning(f"⚠️ Solver Status: {result.message}")
 

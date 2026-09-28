@@ -192,15 +192,32 @@ print(f"  Solve time:            {solve_time:.2f} seconds")
 if res_8760.status == "Optimal":
     from src.calculations import build_metrics
     m_8760 = build_metrics(res_8760.dispatch_df, b_8760.generators_df)
+    
+    df = res_8760.dispatch_df
+    total_unmet = df.get('unmet_mw', pd.Series([0])).sum()
+    max_unmet = df.get('unmet_mw', pd.Series([0])).max()
+    critical_hours = (df.get('unmet_mw', pd.Series([0])) > 1e-4).sum()
+    
+    # Objective decomposition
+    generation_cost = df['hour_total_cost'].sum()
+    penalty_cost = total_unmet * cfg_8760.unmet_demand_penalty
+    
     print(f"  Objective value:       {res_8760.objective_value:,.2f}")
+    print(f"    |-- Generation Cost: {generation_cost:,.2f}")
+    print(f"    \-- Penalty Cost:    {penalty_cost:,.2f}")
     print(f"  Total demand:          {m_8760['total_demand_mwh']:,.0f} MWh")
     print(f"  Total generation:      {m_8760['total_generation_mwh']:,.0f} MWh")
     print(f"  Renewable share:       {m_8760['renewable_share_pct']:.2f}%")
-    print(f"  Thermal generation:    {res_8760.dispatch_df['thermal_mw'].sum():,.0f} MWh")
+    print(f"  Thermal generation:    {df['thermal_mw'].sum():,.0f} MWh")
     print(f"  Total emissions:       {m_8760['total_kg_co2']:,.0f} kg")
     
+    # Reliability stats
+    print(f"\n  [Reliability Mode Stats]")
+    print(f"  Total Unmet Demand:    {total_unmet:,.1f} MWh")
+    print(f"  Max Hourly Unmet:      {max_unmet:,.1f} MW")
+    print(f"  Critical Hours Count:  {critical_hours} hours")
+    
     # Calculate violations
-    df = res_8760.dispatch_df
     # Demand Balance Error
     net_gen = df["solar_mw"] + df["wind_mw"] + df["thermal_mw"] + df.get("discharge_mw", 0) - df.get("charge_mw", 0) + df.get("unmet_mw", 0)
     max_demand_err = (net_gen - df["demand_mw"]).abs().max()
@@ -211,9 +228,9 @@ if res_8760.status == "Optimal":
     if ramp_diff > cfg_8760.ramp_limit_mw_per_hour + 1e-4:
         max_ramp_viol = ramp_diff - cfg_8760.ramp_limit_mw_per_hour
         
+    print(f"\n  [Constraint Checks]")
     print(f"  Max demand-bal error:  {max_demand_err:.6f}")
     print(f"  Max thermal-ramp viol: {max_ramp_viol:.6f}")
-    print(f"  Any unmet demand:      {df.get('unmet_mw', pd.Series([0])).sum() > 1e-4}")
 
 print("\n" + "=" * 60)
 print("ALL VERIFICATION COMPLETE")
