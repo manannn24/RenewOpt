@@ -40,7 +40,15 @@ def render_results(result, generators_df):
             rename_cols[col] = title
 
     display_df = df[disp_cols].copy().rename(columns=rename_cols).round(2)
-    st.dataframe(display_df, use_container_width=True, height=400)
+    if "timestamp" in df.columns:
+        display_df.insert(0, "Timestamp", df["timestamp"])
+    
+    # Large dataset handling for dataframe view
+    if len(display_df) > 1000:
+        st.caption(f"Showing first 1000 of {len(display_df)} rows for performance.")
+        st.dataframe(display_df.head(1000), use_container_width=True, height=400)
+    else:
+        st.dataframe(display_df, use_container_width=True, height=400)
 
     # --- Summary metrics ---
     st.subheader("📊 Summary Metrics")
@@ -52,37 +60,42 @@ def render_results(result, generators_df):
 
     # --- Charts ---
     st.subheader("📉 Charts")
+    
+    # Use timestamp for x-axis if available, otherwise hour
+    x_col = df["timestamp"] if "timestamp" in df.columns else df["hour"]
+    x_title = "Time" if "timestamp" in df.columns else "Hour"
+    marker_mode = "lines" if len(df) > 100 else "lines+markers"
 
     # Chart A: Demand vs Total Generation
     fig_a = go.Figure()
-    fig_a.add_trace(go.Scatter(x=df["hour"], y=df["demand_mw"], name="Demand", mode="lines+markers", line=dict(color="red", width=2, dash="dash")))
-    fig_a.add_trace(go.Scatter(x=df["hour"], y=df["total_generation_mw"], name="Total Generation", mode="lines+markers", line=dict(color="blue", width=2)))
-    fig_a.update_layout(title="Chart A: Demand vs Total Generation", xaxis_title="Hour", yaxis_title="MWh")
+    fig_a.add_trace(go.Scatter(x=x_col, y=df["demand_mw"], name="Demand", mode=marker_mode, line=dict(color="red", width=2, dash="dash")))
+    fig_a.add_trace(go.Scatter(x=x_col, y=df["total_generation_mw"], name="Total Generation", mode=marker_mode, line=dict(color="blue", width=2)))
+    fig_a.update_layout(title="Chart A: Demand vs Total Generation", xaxis_title=x_title, yaxis_title="MWh")
     st.plotly_chart(fig_a, use_container_width=True)
 
     # Chart B: Hourly Dispatch by Source
     fig_b = go.Figure()
-    fig_b.add_trace(go.Bar(x=df["hour"], y=df["solar_mw"], name="Solar", marker_color="#FFA500"))
-    fig_b.add_trace(go.Bar(x=df["hour"], y=df["wind_mw"], name="Wind", marker_color="#1E90FF"))
-    fig_b.add_trace(go.Bar(x=df["hour"], y=df["thermal_mw"], name="Thermal", marker_color="#808080"))
+    fig_b.add_trace(go.Scatter(x=x_col, y=df["solar_mw"], name="Solar", stackgroup='one', fillcolor="#FFA500", line=dict(width=0)))
+    fig_b.add_trace(go.Scatter(x=x_col, y=df["wind_mw"], name="Wind", stackgroup='one', fillcolor="#1E90FF", line=dict(width=0)))
+    fig_b.add_trace(go.Scatter(x=x_col, y=df["thermal_mw"], name="Thermal", stackgroup='one', fillcolor="#808080", line=dict(width=0)))
     if "discharge_mw" in df.columns:
-        fig_b.add_trace(go.Bar(x=df["hour"], y=df["discharge_mw"], name="Battery Discharge", marker_color="#32CD32"))
+        fig_b.add_trace(go.Scatter(x=x_col, y=df["discharge_mw"], name="Battery Discharge", stackgroup='one', fillcolor="#32CD32", line=dict(width=0)))
     if "unmet_mw" in df.columns:
-        fig_b.add_trace(go.Bar(x=df["hour"], y=df["unmet_mw"], name="Unmet Demand", marker_color="#FF0000"))
-    fig_b.update_layout(title="Chart B: Hourly Dispatch Stack", barmode="stack", xaxis_title="Hour", yaxis_title="MWh")
+        fig_b.add_trace(go.Scatter(x=x_col, y=df["unmet_mw"], name="Unmet Demand", stackgroup='one', fillcolor="#FF0000", line=dict(width=0)))
+    fig_b.update_layout(title="Chart B: Dispatch Stack (Area)", xaxis_title=x_title, yaxis_title="MWh")
     st.plotly_chart(fig_b, use_container_width=True)
 
     # Phase 2 Charts
     if "soc_mwh" in df.columns:
         fig_batt = go.Figure()
-        fig_batt.add_trace(go.Scatter(x=df["hour"], y=df["soc_mwh"], name="State of Charge", fill='tozeroy', marker_color="#9370DB"))
-        fig_batt.update_layout(title="Phase 2: Battery State of Charge (SOC)", xaxis_title="Hour", yaxis_title="MWh")
+        fig_batt.add_trace(go.Scatter(x=x_col, y=df["soc_mwh"], name="State of Charge", fill='tozeroy', marker_color="#9370DB"))
+        fig_batt.update_layout(title="Phase 2: Battery State of Charge (SOC)", xaxis_title=x_title, yaxis_title="MWh")
         st.plotly_chart(fig_batt, use_container_width=True)
 
     if "shadow_price" in df.columns:
         fig_sp = go.Figure()
-        fig_sp.add_trace(go.Scatter(x=df["hour"], y=df["shadow_price"], name="Shadow Price", mode="lines+markers", line=dict(color="#FF1493")))
-        fig_sp.update_layout(title="Phase 2: Shadow Prices (Marginal Cost of Energy)", xaxis_title="Hour", yaxis_title="₹/MWh")
+        fig_sp.add_trace(go.Scatter(x=x_col, y=df["shadow_price"], name="Shadow Price", mode=marker_mode, line=dict(color="#FF1493", width=1)))
+        fig_sp.update_layout(title="Phase 2: Shadow Prices (Marginal Cost of Energy)", xaxis_title=x_title, yaxis_title="₹/MWh")
         st.plotly_chart(fig_sp, use_container_width=True)
 
     # Chart C & D: Pies
@@ -99,7 +112,33 @@ def render_results(result, generators_df):
     col_c.plotly_chart(fig_c, use_container_width=True)
     col_d.plotly_chart(fig_d, use_container_width=True)
 
-    # Chart E: Emissions
-    emission_data = {"Solar": metrics["solar_kg_co2"], "Wind": metrics["wind_kg_co2"], "Thermal": metrics["thermal_kg_co2"]}
-    fig_e = px.bar(x=list(emission_data.keys()), y=list(emission_data.values()), title="Chart E: CO₂ Emissions", labels={"x": "Source", "y": "CO₂ (kg)"}, color=list(emission_data.keys()))
-    st.plotly_chart(fig_e, use_container_width=True)
+    # Monthly Aggregation
+    if "timestamp" in df.columns and len(df) > 1000:
+        st.subheader("📅 Monthly Analysis Summary")
+        df_month = df.copy()
+        
+        # Ensure timestamp is datetime before dt operations
+        df_month["timestamp"] = pd.to_datetime(df_month["timestamp"])
+        df_month["month"] = df_month["timestamp"].dt.to_period("M")
+        
+        agg_cols = {
+            "demand_mw": "sum", "solar_mw": "sum", "wind_mw": "sum", 
+            "thermal_mw": "sum", "hour_total_cost": "sum", "thermal_co2_kg": "sum"
+        }
+        if "discharge_mw" in df.columns:
+            agg_cols["discharge_mw"] = "sum"
+            agg_cols["charge_mw"] = "sum"
+        if "unmet_mw" in df.columns:
+            agg_cols["unmet_mw"] = "sum"
+            
+        monthly = df_month.groupby("month").agg(agg_cols).reset_index()
+        monthly["month"] = monthly["month"].astype(str)
+        
+        monthly["renewable_share_pct"] = (monthly["solar_mw"] + monthly["wind_mw"]) / monthly["demand_mw"] * 100
+        
+        # Display monthly table
+        st.dataframe(monthly.round(2), use_container_width=True)
+        
+        # Monthly bar chart
+        fig_m = px.bar(monthly, x="month", y=["solar_mw", "wind_mw", "thermal_mw"], title="Monthly Generation Mix", labels={"value": "MWh", "month": "Month", "variable": "Source"})
+        st.plotly_chart(fig_m, use_container_width=True)

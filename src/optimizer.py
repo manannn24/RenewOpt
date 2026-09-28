@@ -264,6 +264,11 @@ def solve_dispatch(
 
     dispatch_df = pd.DataFrame(records)
 
+    if "timestamp" in demand_df.columns:
+        ts_map = demand_df.set_index("hour")["timestamp"].to_dict()
+        dispatch_df["timestamp"] = dispatch_df["hour"].map(ts_map)
+        dispatch_df["timestamp"] = pd.to_datetime(dispatch_df["timestamp"])
+
     total_unmet = dispatch_df["unmet_mw"].sum() if cfg.enable_reliability else 0.0
 
     # --- Post-solve verification ---

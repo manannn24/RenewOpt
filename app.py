@@ -64,31 +64,34 @@ elif page == "🔬 Optimization":
     st.subheader("Mathematical Model Summary")
 
     with st.expander("📐 View Full Mathematical Formulation", expanded=True):
-        st.markdown(r"""
-**Decision Variables** (for each hour $t = 0, 1, ..., 23$):
+        st.markdown(rf"""
+**Decision Variables** (for each hour $t = 0, 1, ..., N-1$):
 - $S_t$ = Solar generation (MWh)
 - $W_t$ = Wind generation (MWh)  
 - $T_t$ = Thermal generation (MWh)
 - **Phase 2 Variables:** $C_t$ (Charge), $D_t$ (Discharge), $SOC_t$ (State of Charge), $Unmet_t$ (Unmet Demand)
 
 **Objective Function (Minimize)**:
-$$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + P_{unmet} \cdot Unmet_t \right)$$
+$$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot T_t + P_{{unmet}} \cdot Unmet_t \right)$$
 
 **Constraints**:
 
 | Constraint | Equation | Type |
 |-----------|----------|------|
 | Demand Balance | $S_t + W_t + T_t + D_t - C_t + Unmet_t = Demand_t$ | Equality |
-| Solar Availability | $S_t \leq \text{SolarAvail}_t$ | Upper bound |
-| Wind Availability | $W_t \leq \text{WindAvail}_t$ | Upper bound |
-| Thermal Capacity | $T_t \leq \text{ThermalCap}$ | Upper bound |
-| Thermal Ramp | $\|T_t - T_{t-1}\| \leq \text{RampLimit}$ | Phase 2 |
-| Hourly CO2 Cap | $T_t \cdot \text{CO2}_{th} \leq \text{CO2Cap}_t$ | Phase 2 |
-| Battery Dynamics | $SOC_t = SOC_{t-1} + \eta_c C_t - D_t / \eta_d$ | Phase 2 |
+| Solar Availability | $S_t \leq \text{{SolarAvail}}_t$ | Upper bound |
+| Wind Availability | $W_t \leq \text{{WindAvail}}_t$ | Upper bound |
+| Thermal Capacity | $T_t \leq \text{{ThermalCap}}$ | Upper bound |
+| Thermal Ramp | $\|T_t - T_{{t-1}}\| \leq \text{{RampLimit}}$ | Phase 2 |
+| Hourly CO2 Cap | $T_t \cdot \text{{CO2}}_{{th}} \leq \text{{CO2Cap}}_t$ | Phase 2 |
+| Battery Dynamics | $SOC_t = SOC_{{t-1}} + \eta_c C_t - D_t / \eta_d$ | Phase 2 |
 | Non-Negativity | $S_t, W_t, T_t, C_t, D_t, Unmet_t \geq 0$ | Lower bound |
         """)
 
     bundle = st.session_state.bundle
+    dataset_length = len(bundle.demand_df)
+    
+    st.info(f"📅 Active Model Horizon: {dataset_length} hours")
 
     # Validation check
     from src.validation import validate_co2_cap, validate_battery_config, validate_ramp_config
@@ -105,7 +108,11 @@ $$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + 
     st.subheader("Advanced Configuration (Phase 2)")
     col_a, col_b, col_c = st.columns(3)
     enable_ramp = col_a.checkbox("Enable Thermal Ramp Constraints", value=False)
-    enable_co2 = col_b.checkbox("Enable Hourly CO₂ Cap", value=False)
+    
+    # Only allow CO2 cap if the dataset has it (e.g., 24h default)
+    has_co2_cap = bundle.co2_cap_df is not None
+    enable_co2 = col_b.checkbox("Enable Hourly CO₂ Cap", value=False, disabled=not has_co2_cap)
+    
     enable_battery = col_c.checkbox("Enable Battery Storage", value=False)
     enable_reliability = col_a.checkbox("Enable Reliability Mode (Allow Unmet Demand)", value=False)
     initial_thermal = 400.0
@@ -119,6 +126,12 @@ $$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + 
         "enable_reliability": enable_reliability,
         "initial_thermal_output_mw": initial_thermal,
     }
+    
+    # Clear stale result if inputs change
+    if "last_overrides" not in st.session_state or st.session_state.last_overrides != overrides:
+        st.session_state.result = None
+        st.session_state.last_overrides = overrides
+
     from src.data_loader import build_phase2_config
     phase2_cfg = build_phase2_config(bundle, overrides)
 
@@ -144,16 +157,18 @@ $$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + 
     )
     if infeasible_hours and not enable_reliability and not enable_battery:
         st.warning(f"⚠️ {len(infeasible_hours)} hour(s) may be infeasible before optimization:")
-        for h in infeasible_hours:
+        for h in infeasible_hours[:10]: # cap display
             st.warning(
                 f"Hour {h['hour']}: Demand={h['demand']:.0f} MW, "
                 f"Max Available={h['max_available']:.0f} MW, "
                 f"Shortfall={h['shortfall']:.0f} MW"
             )
+        if len(infeasible_hours) > 10:
+            st.warning(f"... and {len(infeasible_hours) - 10} more.")
     elif infeasible_hours:
         st.info(f"ℹ️ {len(infeasible_hours)} hour(s) have demand exceeding generation capacity, but Battery or Reliability mode might resolve it.")
     else:
-        st.success("✅ All 24 hours are pre-feasibility checked: supply can meet demand.")
+        st.success(f"✅ All {dataset_length} hours are pre-feasibility checked: supply can meet demand.")
 
     st.divider()
     if st.button("▶️ Run LP Optimization", type="primary", use_container_width=True):
@@ -174,6 +189,36 @@ $$Z = \sum_{t=0}^{23} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + 
                 st.warning("⚠️ Post-solve verification found issues. Check Results page.")
         elif result.status == "Infeasible":
             st.error(f"❌ LP Infeasible: {result.message}")
+            from src.diagnostic import diagnose_infeasibility
+            diag = diagnose_infeasibility(
+                bundle.demand_df, bundle.solar_df, bundle.wind_df, bundle.generators_df, phase2_cfg
+            )
+            if diag:
+                if diag.get("reason") == "marginal":
+                    st.info("The infeasibility appears marginal. Try relaxing constraints slightly.")
+                else:
+                    st.warning("### 🔍 Ramp / Capacity Infeasibility Diagnostic")
+                    if diag.get('ramp_limit_mw') is not None:
+                        st.markdown(
+                            f"**Strict thermal ramp constraints make the {len(bundle.demand_df)}-hour problem mathematically infeasible.**\n"
+                            f"Net-load volatility exceeds the thermal ramp capacity.\n\n"
+                            f"- **Configured Ramp Limit**: {diag['ramp_limit_mw']:.0f} MW/h\n"
+                            f"- **Initial Thermal Output**: {diag['initial_thermal_mw']:.0f} MW\n"
+                            f"- **Most Restrictive Hour**: Transition to Hour {diag['critical_hour']}\n"
+                            f"- **Previous Thermal**: {diag['prev_thermal_mw']:.0f} MW\n"
+                            f"- **Allowed Thermal Adjustment**: ±{diag['ramp_limit_mw']:.0f} MW\n"
+                            f"- **Thermal Reached**: {diag['thermal_mw']:.0f} MW (Change: {diag['thermal_change_mw']:+.0f} MW)\n"
+                            f"- **Required Additional Generation (Unmet)**: {diag['unmet_mw']:.0f} MW\n"
+                            f"- **Battery Storage Available?**: {'Yes' if diag['battery_available'] else 'No'}\n"
+                            f"- **Would Reliability Mode help?**: Yes (it makes the optimization solvable by explicitly permitting and penalizing unmet demand while retaining the ramp constraint)."
+                        )
+                    else:
+                        st.markdown(
+                            f"**Capacity constraints make the {len(bundle.demand_df)}-hour problem mathematically infeasible.**\n"
+                            f"- **Most Restrictive Hour**: {diag['critical_hour']}\n"
+                            f"- **Required Additional Generation (Unmet)**: {diag['unmet_mw']:.0f} MW\n"
+                            f"- **Would Reliability Mode help?**: Yes (makes it solvable via penalized unmet demand)."
+                        )
         else:
             st.warning(f"⚠️ Solver Status: {result.message}")
 
