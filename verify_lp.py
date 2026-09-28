@@ -233,5 +233,49 @@ if res_8760.status == "Optimal":
     print(f"  Max thermal-ramp viol: {max_ramp_viol:.6f}")
 
 print("\n" + "=" * 60)
+print("CO2 + BATTERY INTERACTION DEMONSTRATION")
+print("=" * 60)
+print("\n[13] DEMONSTRATING INTER-TEMPORAL SHIFTING")
+# Create a small dataset showing shifting
+dem_df = pd.DataFrame({"hour": [0, 1, 2, 3], "demand_mw": [100.0, 100.0, 100.0, 100.0]})
+sol_df = pd.DataFrame({"hour": [0, 1, 2, 3], "solar_available_mw": [0.0, 0.0, 0.0, 0.0]})
+win_df = pd.DataFrame({"hour": [0, 1, 2, 3], "wind_available_mw": [0.0, 0.0, 0.0, 0.0]})
+gen_df = pd.DataFrame({
+    "source": ["Solar", "Wind", "Thermal"],
+    "max_capacity_mw": [100.0, 100.0, 200.0],
+    "cost_per_mwh": [10.0, 15.0, 50.0],
+    "co2_per_mwh": [0.0, 0.0, 1000.0],
+})
+# Cap CO2 at hour 2 to be very tight (e.g. max 50 MW thermal = 50,000 kg)
+# Normally needs 100 MW thermal, so it will be capped
+co2_cap_df = pd.DataFrame({
+    "hour": [0, 1, 2, 3],
+    "co2_cap_kg": [200000.0, 200000.0, 50000.0, 200000.0]
+})
+from src.optimizer import Phase2Config
+cfg_demo = Phase2Config(
+    enable_co2_cap=True, co2_cap_df=co2_cap_df,
+    enable_battery=True, battery_capacity_mwh=100.0,
+    charge_rate_max_mw=100.0, discharge_rate_max_mw=100.0,
+    charge_efficiency=1.0, discharge_efficiency=1.0,
+    initial_soc_mwh=0.0, min_soc_mwh=0.0, max_soc_mwh=100.0,
+    enable_reliability=True, unmet_demand_penalty=9999.0,
+    enable_ramp=False
+)
+res_demo = solve_dispatch(dem_df, sol_df, win_df, gen_df, cfg_demo)
+if res_demo.status == "Optimal":
+    df_demo = res_demo.dispatch_df
+    print("  Status:               Optimal")
+    print("  Total Unmet Demand:   0.0 MWh" if df_demo['unmet_mw'].sum() < 1e-4 else f"  Total Unmet Demand:   {df_demo['unmet_mw'].sum()} MWh")
+    print("  Battery Behavior:")
+    for _, row in df_demo.iterrows():
+        hr = int(row['hour'])
+        therm = row['thermal_mw']
+        chg = row.get('charge_mw', 0)
+        dis = row.get('discharge_mw', 0)
+        soc = row.get('soc_mwh', 0)
+        print(f"    Hour {hr}: Thermal={therm:5.1f} MW, Charge={chg:5.1f} MW, Discharge={dis:5.1f} MW, SOC={soc:5.1f} MWh")
+
+print("\n" + "=" * 60)
 print("ALL VERIFICATION COMPLETE")
 print("=" * 60)
