@@ -259,3 +259,13 @@ RenewOpt/
 - **CBC Solver**: https://github.com/coin-or/Cbc
 
 > **Data Attribution:** All numerical values in `data/` and `data_8760/` are **synthetic and project-generated**. They are suitable for academic demonstration only.
+
+
+## 24-Hour CO₂ & Battery Demonstration
+
+The 24-hour dataset includes a synthetic `co2_cap.csv` designed specifically to demonstrate inter-temporal energy shifting.
+
+- **Synthetic Cap Values:** For most hours, the CO₂ emission cap is effectively non-binding (1,000,000 kg). During the evening peak (hours 17..20), the cap is tightened to **550,000 kg** per hour.
+- **Why it is tighter:** This simulates a restrictive emission policy during peak hours when thermal generation typically ramps up to cover the loss of solar availability.
+- **Battery Parameters:** Capacity 400 MWh, initial/min SOC 0, max SOC 400, charge/discharge rates 100 MW, efficiencies 0.948.
+- **Resulting Behavior:** The Linear Program proactively charges the battery from the grid in the hours immediately preceding the cap (e.g., hours 14-16). During the constrained evening peak (17-20), thermal generation hits its strict emission limit of ~670 MW, and the battery discharges to cover the residual demand, resulting in zero unmet demand. This clearly demonstrates Phase 2's inter-temporal coupling capabilities.

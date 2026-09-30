@@ -112,6 +112,8 @@ $$Z = \sum_{{t=0}}^{{N-1}} \left( C_s \cdot S_t + C_w \cdot W_t + C_{{th}} \cdot
     # Only allow CO2 cap if the dataset has it (e.g., 24h default)
     has_co2_cap = bundle.co2_cap_df is not None
     enable_co2 = col_b.checkbox("Enable Hourly CO₂ Cap", value=False, disabled=not has_co2_cap)
+    if not has_co2_cap:
+        col_b.caption("Hourly CO₂ Cap unavailable for this dataset — no CO₂-cap data supplied.")
     
     enable_battery = col_c.checkbox("Enable Battery Storage", value=False)
     enable_reliability = col_a.checkbox("Enable Reliability Mode (Allow Unmet Demand)", value=False)

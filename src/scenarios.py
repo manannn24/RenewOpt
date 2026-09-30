@@ -210,11 +210,11 @@ def run_phase2_co2_with_battery(demand_df, solar_df, wind_df, generators_df,
         battery_capacity_mwh=400.0,
         charge_rate_max_mw=100.0,
         discharge_rate_max_mw=100.0,
-        charge_efficiency=0.90,
-        discharge_efficiency=0.90,
-        initial_soc_mwh=200.0,
-        min_soc_mwh=40.0,
-        max_soc_mwh=360.0,
+        charge_efficiency=0.948,
+        discharge_efficiency=0.948,
+        initial_soc_mwh=0.0,
+        min_soc_mwh=0.0,
+        max_soc_mwh=400.0,
     )
     if battery_cfg:
         cfg.battery_capacity_mwh = battery_cfg.get("capacity_mwh", cfg.battery_capacity_mwh)
@@ -314,11 +314,11 @@ def run_phase2_battery_only(demand_df, solar_df, wind_df, generators_df) -> Scen
         battery_capacity_mwh=400.0,
         charge_rate_max_mw=100.0,
         discharge_rate_max_mw=100.0,
-        charge_efficiency=0.90,
-        discharge_efficiency=0.90,
-        initial_soc_mwh=200.0,
-        min_soc_mwh=40.0,
-        max_soc_mwh=360.0,
+        charge_efficiency=0.948,
+        discharge_efficiency=0.948,
+        initial_soc_mwh=0.0,
+        min_soc_mwh=0.0,
+        max_soc_mwh=400.0,
     )
     return run_scenario(
         name="P2: Battery Only",

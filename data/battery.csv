@@ -1,9 +1,9 @@
 parameter,value
-capacity_mwh,400
-charge_rate_max_mw,100
-discharge_rate_max_mw,100
-charge_efficiency,0.90
-discharge_efficiency,0.90
-initial_soc_mwh,200
-min_soc_mwh,40
-max_soc_mwh,360
+capacity_mwh,400.0
+charge_rate_max_mw,100.0
+discharge_rate_max_mw,100.0
+initial_soc_mwh,0.0
+min_soc_mwh,0.0
+max_soc_mwh,400.0
+charge_efficiency,0.948
+discharge_efficiency,0.948

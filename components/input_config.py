@@ -118,6 +118,8 @@ def render_input_config() -> DataBundle:
             solar_df=bundle.solar_df,
             wind_df=bundle.wind_df,
             generators_df=edited_gen,
+            co2_cap_df=bundle.co2_cap_df,
+            battery_df=bundle.battery_df,
         )
 
         # Validate
