@@ -10,3 +10,29 @@ venv/
 .pytest_cache/
 env/
 .DS_Store
+# Logs, errors, and solver outputs
+*.err
+streamlit.err
+
+# Local academic deliverables, briefs, and presentation payloads (kept local-only)
+C197-C203-C208-Operations-Researc-Project-Summary.pdf
+RenewOpt_Code_Viva_Study_Brief.md
+RenewOpt_Code_Viva_Study_Guide.md
+RenewOpt_Operations_Research_Project_Report.docx
+RenewOpt_Presentation_Source.md
+RenewOpt_Report_Brief.md
+edit_payload.json
+edit_ppt.py
+payload_1.json
+payload_2.json
+split_payload.py
+
+# Internal RenewOpt development specifications and audit reports
+/8760_merge_readiness_report.md
+/RenewOpt_Development_Specification_AI_Build_Prompt.md
+/RenewOpt_Full_Year_8760_Implementation_Verification_Specification.md
+/RenewOpt_Full_Year_8760_Master_Specification.md
+/RenewOpt_Master_Project_Specification.md
+/RenewOpt_Phase2_Implementation_Verification_Specification.md
+/RenewOpt_Phase2_Master_Specification.md
+/phase2_completion_audit.md
