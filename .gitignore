@@ -1,12 +1,52 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+
+# Virtual environments
 .venv/
 venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment files
 .env
+.env.*
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE, editor, and OS metadata
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs, errors, and solver outputs
 *.log
+*.err
+streamlit.err
+
+# Streamlit local runtime state
 .streamlit/
 
-.pytest_cache/
-env/
-.DS_Store
+# Local academic deliverables, briefs, and presentation payloads (kept local-only)
+C197-C203-C208-Operations-Researc-Project-Summary.pdf
+RenewOpt_Code_Viva_Study_Brief.md
+RenewOpt_Code_Viva_Study_Guide.md
+RenewOpt_Operations_Research_Project_Report.docx
+RenewOpt_Presentation_Source.md
+RenewOpt_Report_Brief.md
+edit_payload.json
+edit_ppt.py
+payload_1.json
+payload_2.json
+split_payload.py

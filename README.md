@@ -1,271 +1,376 @@
 # RenewOpt: Renewable Energy Grid Dispatch Optimization
 
-## 1. Core Problem Statement
+[![CI](https://github.com/manannn24/RenewOpt/actions/workflows/ci.yml/badge.svg)](https://github.com/manannn24/RenewOpt/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
+[![Optimization: PuLP](https://img.shields.io/badge/Optimization-PuLP%20%2F%20CBC-green.svg)](https://coin-or.github.io/pulp/)
 
-The electrical grid must continuously balance supply and demand. Integrating large amounts of variable renewable energy (VRE) like Solar and Wind creates significant operational challenges. 
-
-Grid operators need an **Operations Research (OR) model** to determine the most cost-effective and reliable way to dispatch power across a **Full-Year (8,760-hour) planning horizon**.
-
-**RenewOpt solves the Economic Dispatch Problem** using Linear Programming (LP). The objective is to:
-1. **Primary optimization objective**: Minimize total system generation cost while satisfying demand and operational constraints.
-2. **Analytical consequence**: The model will naturally maximize renewable energy utilization to minimize cost because renewables have a zero marginal generation cost in this dataset.
+An open-source Operations Research (OR) platform that solves the **Economic Dispatch Problem** for electrical grids with high penetrations of variable renewable energy (Solar and Wind), thermal generation, and battery energy storage. Formulated as a Linear Program (LP) in Python using **PuLP** and the **COIN-OR CBC** solver, RenewOpt supports both rapid 24-hour classroom demonstrations and large-scale **Full-Year (8,760-hour)** planning horizons.
 
 ---
 
-## 2. Linear Programming Formulation
+## Project Team
 
-The core optimization is formulated as a linear program and solved using the **CBC solver** via the **PuLP** Python library.
+This project was developed as an academic Operations Research group project by:
 
-### Sets & Indices
-- $t \in \{0, 1, ..., 8759\}$: Planning horizon periods (1 hour each).
-
-### Decision Variables (Continuous)
-- $S_t$: Solar power dispatched at hour $t$ (MWh)
-- $W_t$: Wind power dispatched at hour $t$ (MWh)
-- $T_t$: Thermal power dispatched at hour $t$ (MWh)
-- $C_t$: Battery charging power at hour $t$ (MWh)
-- $D_t$: Battery discharging power at hour $t$ (MWh)
-- $SOC_t$: Battery State of Charge at hour $t$ (MWh)
-- $Unmet_t$: Unmet demand (slack variable for reliability mode) at hour $t$ (MWh)
-
-### Objective Function
-Minimize the total annual system cost, including an extreme penalty for unmet demand:
-$$ \text{Minimize } Z = \sum_{t=0}^{8759} \left( C_s \cdot S_t + C_w \cdot W_t + C_{th} \cdot T_t + P_{unmet} \cdot Unmet_t \right) $$
-
-### Constraints
-
-**1. Demand Balance** (The fundamental grid equation):
-$$ S_t + W_t + T_t + D_t - C_t + Unmet_t = \text{Demand}_t \quad \forall t $$
-
-**2. Renewable Availability** (Upper bounds based on weather):
-$$ 0 \leq S_t \leq \text{SolarAvail}_t \quad \forall t $$
-$$ 0 \leq W_t \leq \text{WindAvail}_t \quad \forall t $$
-
-**3. Thermal Capacity & Ramping** (Generator physics):
-$$ 0 \leq T_t \leq \text{ThermalCap} \quad \forall t $$
-$$ |T_t - T_{t-1}| \leq \text{RampLimit} \quad \forall t $$
-
-**4. Hourly CO₂ Emissions Cap** (Environmental policy):
-$$ T_t \cdot \text{CO2Factor}_{th} \leq \text{CO2Cap}_t \quad \forall t $$
-
-**5. Battery Dynamics** (Energy storage inter-temporal linkage):
-*(Note: Initial SOC is typically defined by `battery.csv` configuration, e.g., 200 MWh for hour 0)*
-$$ SOC_t = SOC_{t-1} + \eta_{charge} C_t - \frac{D_t}{\eta_{discharge}} \quad \forall t $$
-$$ \text{MinSOC} \leq SOC_t \leq \text{MaxCapacity} \quad \forall t $$
-$$ 0 \leq C_t \leq \text{MaxChargeRate}, \quad 0 \leq D_t \leq \text{MaxDischargeRate} \quad \forall t $$
+- **Manan Jain** — [@manannn24](https://github.com/manannn24)
+- **Behlah Kathavala** — [@behlah-rgb](https://github.com/behlah-rgb)
+- **Devansh Mehta** — [@dmsd723](https://github.com/dmsd723)
 
 ---
 
-## 3. Features
+## Table of Contents
 
-### Core OR Features
-- **Deterministic Linear Programming (LP)** over arbitrary time horizons (supports 24h demo up to 8,760h full year).
-- Inter-temporal battery energy storage optimization (Charge, Discharge, State-of-Charge).
-- Thermal ramp-rate limitations (forces pre-positioning).
-- Hourly CO₂ emission caps.
-- **Reliability Mode (Soft Constraints)**: Reliability mode introduces a penalized unmet-demand slack variable, allowing the model to remain solvable when strict demand satisfaction is impossible under the selected constraints.
-- **Shadow Pricing**: Extracts the dual values (shadow prices) of the demand-balance constraint to represent the marginal cost of electricity (₹/MWh) for every hour of the year.
-
-### Metrics & Analytics
-- Total minimum generation cost, Renewable share, Thermal dependency
-- CO₂ emissions (kg) by source and total
-- Source-wise cost breakdown
-- Hourly Shadow Prices (Marginal Cost)
-- Battery state of charge (SOC) dynamics
-- **Monthly Aggregation**: Converts 8,760 hourly data points into comprehensive monthly generation and emission metrics.
-
-### Scenario Analysis
-- **Phase 1 Scenarios**: Baseline, High Demand, Low Solar, High Thermal Cost, Increased Renewable
-- **Phase 2 Scenarios**: Extended Baseline, Tight Evening CO₂ Cap, Tight CO₂ + Battery, Insufficient Battery, Tight Ramp, Relaxed Ramp, Battery Arbitrage Only
-
-### UI (Streamlit)
-- Dashboard with 4 core KPIs and 4 advanced Phase 2 metrics, plus a Monthly Analysis summary for full-year datasets.
-- Input Configuration to switch between 24h demo and 8,760h datasets.
-- Optimization page with Phase 2 feature toggles and mathematical formulation.
-- Results page with interactive Plotly area/scatter charts (using dataset timestamps).
-- Scenario Analysis with Phase 1 vs Phase 2 comparative analysis.
+- [Project Team](#project-team)
+1. [Operations Research Context & Motivation](#1-operations-research-context--motivation)
+2. [Mathematical Formulation](#2-mathematical-formulation)
+3. [Phase 1 vs. Phase 2 Features](#3-phase-1-vs-phase-2-features)
+4. [Architecture & Repository Layout](#4-architecture--repository-layout)
+5. [Prerequisites & Installation](#5-prerequisites--installation)
+6. [How to Run](#6-how-to-run)
+7. [Datasets & Provenance](#7-datasets--provenance)
+8. [Automated Testing & Mathematical Verification](#8-automated-testing--mathematical-verification)
+9. [Infeasibility Diagnostics & Reliability Mode](#9-infeasibility-diagnostics--reliability-mode)
+10. [Known Limitations & OR Trade-offs](#10-known-limitations--or-trade-offs)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Contributing & License](#12-contributing--license)
 
 ---
 
-## 4. Technology Stack
+## 1. Operations Research Context & Motivation
 
-| Component | Technology |
-|---|---|
-| Language | Python 3.x |
-| Optimization | PuLP |
-| Solver | CBC (via PuLP) |
-| Data Processing | Pandas, NumPy |
-| Visualization | Plotly |
-| Frontend | Streamlit |
-| Testing | pytest |
-| Data Storage | CSV |
+Modern electricity grids face a core operational challenge: supply must continuously match demand at every second, while variable renewable energy (VRE) generation fluctuates with weather conditions. Grid operators require formal mathematical models to determine the optimal dispatch schedules that minimize economic generation costs while strictly adhering to physical generator limits, environmental regulations, and energy storage conservation laws.
+
+**RenewOpt** models this system as a deterministic **Linear Program (LP)**:
+- **Primary Objective:** Minimize total grid generation and operating costs over the configured planning horizon.
+- **Analytical Property:** Because solar and wind have lower marginal costs (₹10/MWh and ₹15/MWh) than thermal units (₹85/MWh), the optimizer naturally prioritizes renewable generation to the maximum extent permitted by availability and system constraints.
 
 ---
 
-## 5. Installation
+## 2. Mathematical Formulation
 
-### Prerequisites
-- Python 3.8 or higher
-- pip
+The dispatch problem is solved across discrete time periods $t \in \mathcal{T} = \{0, 1, \dots, N-1\}$, where $N = 24$ for single-day studies or $N = 8,760$ for full-year hourly planning horizons.
 
-### Setup
+### 2.1 Sets, Parameters, and Decision Variables
 
-```bash
-# Clone or download the project
-cd RenewOpt
+| Category | Notation | Units | Description |
+|---|---|---|---|
+| **Index** | $t \in \mathcal{T}$ | hours | Time period index ($0 \le t < N$) |
+| **Parameters** | $D_t$ | MW / MWh | Electricity demand at hour $t$ |
+| | $\text{SolarAvail}_t$ | MW | Maximum available solar power at hour $t$ |
+| | $\text{WindAvail}_t$ | MW | Maximum available wind power at hour $t$ |
+| | $T_{max}$ | MW | Maximum thermal generator capacity (800 MW) |
+| | $c_s, c_w, c_{th}$ | ₹/MWh | Marginal generation cost ($c_s=10, c_w=15, c_{th}=85$) |
+| | $c_{pen}$ | ₹/MWh | Reliability penalty for unmet demand (₹50,000/MWh) |
+| | $\Delta T_{max}$ | MW/h | Thermal ramp rate limit |
+| | $T_{init}$ | MW | Initial thermal output at hour 0 |
+| | $e_{th}$ | kg/MWh | Thermal emission factor (820 kg CO₂/MWh) |
+| | $\text{CO2Cap}_t$ | kg | Hourly environmental emission cap at hour $t$ |
+| | $B_{cap}$ | MWh | Battery storage nameplate capacity (400 MWh) |
+| | $C_{max}, D_{max}$ | MW | Maximum charging and discharging rates (100 MW) |
+| | $\text{SOC}_{min}, \text{SOC}_{max}$ | MWh | State-of-charge lower and upper bounds |
+| | $\text{SOC}_{init}$ | MWh | Initial battery state-of-charge |
+| | $\eta_c, \eta_d$ | - | Charging and discharging efficiencies ($\eta_c=\eta_d=0.948$) |
+| **Variables** | $S_t \ge 0$ | MWh | Solar energy dispatched at hour $t$ |
+| | $W_t \ge 0$ | MWh | Wind energy dispatched at hour $t$ |
+| | $T_t \ge 0$ | MWh | Thermal energy dispatched at hour $t$ |
+| | $C_t \ge 0$ | MWh | Battery energy charged at hour $t$ |
+| | $D_t \ge 0$ | MWh | Battery energy discharged at hour $t$ |
+| | $\text{SOC}_t \ge 0$ | MWh | Energy stored in battery at end of hour $t$ |
+| | $Unmet_t \ge 0$ | MWh | Unmet demand slack variable (Reliability mode) |
 
-# (Recommended) Create a virtual environment
-python -m venv .venv
+### 2.2 Objective Function
 
-# Windows activation
-.venv\Scripts\activate
+Minimize the total generation cost plus penalties for any unmet demand:
 
-# Install dependencies
-pip install -r requirements.txt
+$$\min Z = \sum_{t \in \mathcal{T}} \left( c_s S_t + c_w W_t + c_{th} T_t + c_{pen} Unmet_t \right)$$
+
+*Note: Battery storage incurs no direct marginal cost in the objective function; cycling costs are represented implicitly through round-trip efficiency losses ($\eta_c \cdot \eta_d < 1.0$).*
+
+### 2.3 Constraints
+
+1. **Demand Balance (Hourly Grid Equilibrium):**
+   $$S_t + W_t + T_t + D_t - C_t + Unmet_t = D_t \quad \forall t \in \mathcal{T}$$
+
+2. **Renewable and Thermal Capacity Bounds:**
+   $$0 \le S_t \le \text{SolarAvail}_t \quad \forall t \in \mathcal{T}$$
+   $$0 \le W_t \le \text{WindAvail}_t \quad \forall t \in \mathcal{T}$$
+   $$0 \le T_t \le T_{max} \quad \forall t \in \mathcal{T}$$
+
+3. **Thermal Ramping Physics (Inter-temporal Rate-of-Change):**
+   $$|T_t - T_{t-1}| \le \Delta T_{max} \quad \forall t > 0$$
+   $$|T_0 - T_{init}| \le \Delta T_{max} \quad (t = 0)$$
+   *Linearized as two complementary inequalities:*
+   $$T_t - T_{t-1} \le \Delta T_{max}, \quad T_{t-1} - T_t \le \Delta T_{max}$$
+
+4. **Hourly Environmental CO₂ Emission Caps:**
+   $$T_t \cdot e_{th} \le \text{CO2Cap}_t \quad \forall t \in \mathcal{T}$$
+
+5. **Battery State of Charge (SOC) Conservation:**
+   $$\text{SOC}_t = \text{SOC}_{t-1} + \eta_c C_t - \frac{D_t}{\eta_d} \quad \forall t > 0$$
+   $$\text{SOC}_0 = \text{SOC}_{init} + \eta_c C_0 - \frac{D_0}{\eta_d} \quad (t = 0)$$
+   $$\text{SOC}_{min} \le \text{SOC}_t \le \text{SOC}_{max} \quad \forall t \in \mathcal{T}$$
+   $$0 \le C_t \le C_{max}, \quad 0 \le D_t \le D_{max} \quad \forall t \in \mathcal{T}$$
+
+6. **Dual Values (Shadow Prices):**
+   Dual multipliers $\lambda_t = \frac{\partial Z^*}{\partial D_t}$ are extracted directly from the demand balance equality constraints, representing the marginal system cost (₹/MWh) to supply one additional unit of load at hour $t$.
+
+---
+
+## 3. Phase 1 vs. Phase 2 Features
+
+| Feature | Phase 1 (Baseline) | Phase 2 (Advanced RenewOpt) |
+|---|---|---|
+| **Planning Horizon** | 24 hours | 24 hours and 8,760 hours (Full Year) |
+| **Problem Type** | Static dispatch (independent hours) | Inter-temporally coupled dynamic LP |
+| **Decision Variables** | 72 variables ($S_t, W_t, T_t$) | Up to 61,320 variables ($S_t, W_t, T_t, C_t, D_t, \text{SOC}_t, Unmet_t$) |
+| **Constraints** | 24 balance + capacity bounds | ~35,040 constraints (Balance, Bounds, SOC, Ramp, CO₂) |
+| **Energy Storage** | Not modeled | Bidirectional battery with charge/discharge efficiencies |
+| **Generator Dynamics** | Unconstrained hourly jumps | Explicit thermal ramp limits ($\Delta T \le \text{RampLimit}$) |
+| **Policy Constraints** | None | Hourly CO₂ emissions cap |
+| **Infeasibility Handling**| Solver reports infeasible | Reliability Mode (penalized slack) + Diagnostic Analyzer |
+| **Duality Analysis** | Basic cost calculation | Hourly marginal shadow price extraction ($\lambda_t$) |
+| **Analytics** | Daily summary cards | Daily + Full-Year Monthly Aggregation & Reconciliation |
+
+---
+
+## 4. Architecture & Repository Layout
+
+```text
+RenewOpt/
+├── app.py                          # Streamlit application entry point & page router
+├── verify_lp.py                    # Independent mathematical LP verification script
+├── requirements.txt                # Pinned production & development dependencies
+├── LICENSE                         # MIT open-source license
+├── CONTRIBUTING.md                 # Contributor guidelines and workflow
+├── README.md                       # Comprehensive project documentation
+├── .gitignore                      # Git ignore rules for caches, envs, and local docs
+│
+├── data/                           # 24-Hour Demonstration Dataset
+│   ├── demand.csv                  # 24-hour load profile (545 - 950 MW)
+│   ├── solar_availability.csv      # Diurnal solar availability (0 - 400 MW)
+│   ├── wind_availability.csv       # Variable wind availability (110 - 195 MW)
+│   ├── generators.csv              # Generator capacities, costs, and emissions
+│   ├── battery.csv                 # Battery storage specifications & efficiencies
+│   └── co2_cap.csv                 # Hourly emission caps (550k kg peak / 1M kg off-peak)
+│
+├── data_8760/                      # 8,760-Hour Full-Year Dataset
+│   ├── demand.csv                  # Chronological 8,760-hour demand (timestamp, hour_of_day, demand_mw)
+│   ├── solar_availability.csv      # Full-year seasonal solar generation profile
+│   ├── wind_availability.csv       # Full-year seasonal wind generation profile
+│   └── generators.csv              # Full-year generator specifications
+│
+├── src/                            # Core Operations Research & Pipeline Modules
+│   ├── __init__.py                 # Python package identifier
+│   ├── optimizer.py                # Primary PuLP LP formulation, CBC solver interface & dual extraction
+│   ├── diagnostic.py               # Infeasibility diagnostic analyzer & constraint relaxation
+│   ├── data_loader.py              # Data ingestion, chronological indexing (0..8759), bundle builder
+│   ├── validation.py               # Schema integrity, bounds checking, and pre-solve feasibility
+│   ├── calculations.py             # Metrics derivation (renewable share, emissions, monthly reconciliation)
+│   └── scenarios.py                # Pre-configured scenario analysis definitions
+│
+├── components/                     # Streamlit User Interface Components
+│   ├── __init__.py                 # UI package identifier
+│   ├── dashboard.py                # Executive KPI cards & monthly summary view
+│   ├── input_config.py             # Dataset selection, data explorer & generator editor
+│   ├── results.py                  # Optimal dispatch tables, Plotly area charts & shadow price graphs
+│   └── scenario_analysis.py        # Multi-scenario comparisons & comparative bar charts
+│
+├── tests/                          # Automated Pytest Suite (77 Tests)
+│   ├── __init__.py                 # Test package identifier
+│   ├── test_optimizer.py           # 8 tests: Basic LP optimality, non-negativity, bounds
+│   ├── test_validation.py          # 11 tests: Schema validation, hour ranges, missing values
+│   ├── test_calculations.py        # 7 tests: Cost sums, renewable percentage, emission totals
+│   ├── test_phase2.py              # 36 tests: Battery SOC dynamics, ramp limits, shadow prices, reliability
+│   ├── test_ramp_boundaries.py     # 5 tests: Exact mathematical ramp boundary and non-cyclic checks
+│   ├── test_8760.py                # 5 tests: 8,760-hour data integrity and monthly aggregation
+│   └── test_co2_interaction.py     # 5 tests: 24h CO₂ cap loading, binding states, battery shifting
+│
+└── .github/                        # GitHub Configuration
+    ├── workflows/ci.yml            # Automated CI testing on Python 3.10, 3.11, 3.12
+    └── ISSUE_TEMPLATE/bug_report.md# Standardized bug reporting template
 ```
+
+---
+
+## 5. Prerequisites & Installation
+
+### 5.1 System Prerequisites
+- **Python**: Version 3.8, 3.9, 3.10, 3.11, 3.12, or 3.13.
+- **Operating System**: Windows, macOS, or Linux.
+- **Solver**: COIN-OR CBC is pre-bundled automatically by the `pulp` Python package. No external solver installation is required.
+
+### 5.2 Step-by-Step Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/manannn24/RenewOpt.git
+   cd RenewOpt
+   ```
+
+2. **Create and activate a virtual environment:**
+   - **Windows (PowerShell):**
+     ```powershell
+     python -m venv .venv
+     .venv\Scripts\Activate.ps1
+     ```
+   - **Windows (Command Prompt):**
+     ```cmd
+     python -m venv .venv
+     .venv\Scripts\activate.bat
+     ```
+   - **macOS / Linux (bash/zsh):**
+     ```bash
+     python3 -m venv .venv
+     source .venv/bin/activate
+     ```
+
+3. **Install required dependencies:**
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
 
 ---
 
 ## 6. How to Run
 
-### Start the Application
+### 6.1 Launch the Interactive Web Application
 
 ```bash
 streamlit run app.py
 ```
+Streamlit will launch locally at `http://localhost:8501`.
 
-The app will open at `http://localhost:8501`.
+### 6.2 Recommended Walkthrough
 
-### Recommended Demo Flow
+1. **⚙️ Input Configuration:**
+   - Select **Default Dataset (24 hours)** for interactive constraint exploration, or **Full Year Dataset (8760 hours)** for annual grid simulations.
+   - Use the **Data Explorer** to view hourly trends across single days, date ranges, or full months.
+2. **🔬 LP Optimization:**
+   - Review the mathematical LP formulation rendered in LaTeX.
+   - Configure Phase 2 toggles:
+     - **Thermal Ramp Constraints:** Enable to force ramp-limited thermal transitions.
+     - **Hourly CO₂ Cap:** Enforces emission caps (demonstrates pre-peak battery charging).
+     - **Battery Storage:** Activates inter-temporal energy storage.
+     - **Reliability Mode:** Prevents solver infeasibility by introducing penalized unmet demand slack.
+   - Click **Run LP Optimization**.
+3. **📈 Results:**
+   - Inspect the hourly dispatch table with generation, battery charge/discharge, SOC, and shadow prices.
+   - Review stacked area charts for supply vs. demand balance.
+   - Inspect the hourly Shadow Price curve showing electricity marginal costs.
+   - In full-year mode, inspect the **Monthly Aggregation** summary reconciling demand and fuel mix.
+4. **🔄 Scenario Analysis:**
+   - Select multiple operating scenarios (Baseline, High Demand, Low Solar, Tight Ramp, Tight CO₂ + Battery).
+   - Click **Run Selected Scenarios** to inspect comparative cost, renewable share, and emission tables.
 
-1. **Input Configuration** → Select **Full Year Dataset (8760 hours)**
-2. **Optimization** → Toggle Phase 2 Advanced Options → Run LP
-3. **Results** → View dispatch table, Battery SOC, Shadow Prices, and **Monthly Aggregation**
-4. **Scenario Analysis** → Select scenarios → Compare long-term impacts
+---
 
-### Run Tests
+## 7. Datasets & Provenance
 
+All datasets provided in `data/` and `data_8760/` are **synthetic and project-generated** for academic research and benchmarking. They are designed to reflect realistic operational profiles while remaining fully reproducible.
+
+### 7.1 24-Hour Demonstration Dataset (`data/`)
+- **Demand (`demand.csv`):** Realistic diurnal double-peak curve (early morning dip of 545 MW, morning rise to 850 MW, evening peak of 950 MW at hour 19). Total demand: 18,505 MWh.
+- **Solar (`solar_availability.csv`):** Standard bell-curve availability peaking at 400 MW at hour 12, zero at night.
+- **Wind (`wind_availability.csv`):** Moderately persistent night-and-evening profile ranging between 110 MW and 195 MW.
+- **Generators (`generators.csv`):**
+  - Solar: 400 MW capacity, ₹10/MWh, 0 kg CO₂/MWh
+  - Wind: 300 MW capacity, ₹15/MWh, 0 kg CO₂/MWh
+  - Thermal: 800 MW capacity, ₹85/MWh, 820 kg CO₂/MWh, 200 MW/h default ramp limit
+- **Battery (`battery.csv`):** 400 MWh capacity, 100 MW charge/discharge rate, 0 MWh initial/min SOC, 400 MWh max SOC, $\eta_c = \eta_d = 0.948$ (round-trip efficiency $\approx 89.9\%$).
+- **CO₂ Cap (`co2_cap.csv`):** Synthetic policy cap; 1,000,000 kg for unconstrained hours, tightened to **550,000 kg** during evening peak hours (17, 18, 19, 20).
+
+### 7.2 Full-Year 8,760-Hour Dataset (`data_8760/`)
+- Contains 8,760 hourly sequential records spanning a full calendar year (8,760 rows).
+- Schema: `timestamp, hour_of_day, <metric>_mw`.
+- Total Annual Demand: **31,032,896 MWh** across 365 days.
+- Features distinct seasonal variations (summer solar peaks, monsoon/winter wind shifts).
+
+---
+
+## 8. Automated Testing & Mathematical Verification
+
+RenewOpt enforces quality through two independent testing tiers:
+
+### 8.1 Automated Pytest Suite (77 Tests)
+
+Run the full test suite with warnings silenced:
 ```bash
-python -m pytest tests/ -v -W ignore::DeprecationWarning
+pytest tests/ -v -W ignore::DeprecationWarning
 ```
 
-### Run Standalone Verification
+**Test Coverage Breakdown:**
+- `tests/test_optimizer.py` (8 tests): Small-scale known LP optimality, merit-order solar dispatch, zero-availability limits, demand balance, and infeasible input handling.
+- `tests/test_validation.py` (11 tests): Schema checks, non-negativity enforcement, duplicate hours, missing columns, and pre-solve capacity sufficiency.
+- `tests/test_calculations.py` (7 tests): Mathematical correctness of derived costs, renewable generation share, thermal dependency, and emissions calculations.
+- `tests/test_phase2.py` (36 tests): Thermal ramping constraints, initial thermal output conditions, hourly CO₂ cap binding, battery charge/discharge bounds, SOC inter-temporal conservation, shadow price finiteness, and reliability mode penalties.
+- `tests/test_ramp_boundaries.py` (5 tests): Precise boundary verification testing feasibility at exact ramp limits, infeasibility at $\text{limit} + \epsilon$, and non-cyclic year-end decoupling.
+- `tests/test_8760.py` (5 tests): Full-year data validation, timestamp continuity, chronological indexing, and monthly aggregation reconciliation.
+- `tests/test_co2_interaction.py` (5 tests): 24h CO₂ cap loading, exact 0..23 hour coverage, binding behavior, strict infeasibility, and emergent battery pre-charging behavior.
 
+**Current Test Status:** **77 passed** (100% pass rate).
+
+### 8.2 Standalone Mathematical Verification (`verify_lp.py`)
+
+Run the standalone verification script:
 ```bash
 python verify_lp.py
 ```
 
----
-
-## 7. Dataset Schema
-
-### `data_8760/` (Full-Year Data)
-The system supports full-year chronologically ordered hourly data.
-
-| File | Structure |
-|---|---|
-| `demand.csv` | `timestamp, hour_of_day, demand_mw` |
-| `solar_availability.csv`| `timestamp, hour_of_day, solar_available_mw` |
-| `wind_availability.csv` | `timestamp, hour_of_day, wind_available_mw` |
-| `generators.csv` | `source, max_capacity_mw, cost_per_mwh, co2_per_mwh` |
-
-### Auxiliary Configs
-- `data/battery.csv`: Battery storage specifications (capacity, rates, efficiencies).
-- `data/co2_cap.csv`: (Optional) Hourly emission caps for the 24-hour demo.
+This script solves the optimization problem across baseline, Phase 2, and 8,760-hour configurations, and then independently verifies:
+- Demand balance residual error across every hour: $\max |S_t + W_t + T_t + D_t - C_t + Unmet_t - D_t| < 10^{-3}$ MW (measured: $< 5 \times 10^{-5}$ MW).
+- Generator dispatch respects bounds: $0 \le S_t \le \text{Avail}_t$, $0 \le W_t \le \text{Avail}_t$, $0 \le T_t \le 800$.
+- Thermal ramp rate violations: strictly 0 violations across all 8,759 consecutive hour transitions.
+- Objective function consistency: verifies that $\sum (\text{hourly costs}) = Z^*$ within float tolerance.
 
 ---
 
-## 8. Default Dataset Assumptions
+## 9. Infeasibility Diagnostics & Reliability Mode
 
-This project includes both a 24-hour demo dataset and a massive synthetic 8,760-hour full-year dataset.
-
-### Phase 2 Configurations
-- **Battery**: 400 MWh capacity, 100 MW charge/discharge rate, 90% efficiency.
-- **Ramp Limit**: 200 MW/hr for Thermal generator.
-- **CO₂ Cap**: Can be enabled via UI to demonstrate inter-temporal battery pre-positioning.
-
----
-
-## 9. Project Structure
-
-```
-RenewOpt/
-├── app.py                          # Streamlit entry point
-├── data/                           # 24-hour demo dataset
-├── data_8760/                      # 8,760-hour full-year dataset
-│   ├── demand.csv
-│   ├── solar_availability.csv
-│   ├── wind_availability.csv
-│   └── generators.csv
-├── src/
-│   ├── data_loader.py              # Load datasets (24h/8760h)
-│   ├── validation.py               # Input validation layer
-│   ├── optimizer.py                # Core LP formulation
-│   ├── calculations.py             # Derived metrics
-│   └── scenarios.py                # Scenario definitions
-├── components/
-│   ├── dashboard.py                # Dashboard KPI page
-│   ├── input_config.py             # Input configuration
-│   ├── results.py                  # Results + monthly charts page
-│   └── scenario_analysis.py        # Scenario comparison page
-├── tests/                          # 72 unit & integration tests
-├── verify_lp.py                    # Standalone mathematical verification
-├── requirements.txt
-├── README.md
-└── .gitignore
-```
+In linear programming, combining physical ramp limits with inflexible demand can easily produce an **empty feasible region** (infeasibility):
+- **Why Infeasibility Occurs:** In the 8,760-hour dataset, evening net load ramps up by as much as 1,400 MW/h when solar drops to zero. If the thermal ramp rate is restricted to a tight value (e.g. 200 MW/h) and battery storage is insufficient, no combination of generation can physically meet the hourly demand jump without violating ramp constraints.
+- **Diagnostic Analyzer (`src/diagnostic.py`):** When a strict LP returns `Infeasible`, RenewOpt automatically runs an auxiliary relaxation to locate the exact bottleneck hour, reporting:
+  - Critical hour of failure
+  - Required generation jump vs. allowed ramp limit
+  - Unmet power shortage
+- **Reliability Mode (Penalized Slack):** By enabling Reliability Mode, the demand balance equation is relaxed using non-negative slack variables $Unmet_t \ge 0$, penalized at $c_{pen} = ₹50,000/\text{MWh}$ in the objective. This guarantees mathematical feasibility while clearly reporting the location and magnitude of necessary demand curtailment.
 
 ---
 
-## 10. Automated Tests
+## 10. Known Limitations & OR Trade-offs
 
-- `test_validation.py`: 11 tests
-- `test_optimizer.py`: 8 tests
-- `test_calculations.py`: 7 tests
-- `test_phase2.py`: 36 tests
-- `test_8760.py`: 5 tests
-- `test_ramp_boundaries.py`: 5 tests
-
-**Total: 72 tests**
-
-**Verified result: 72/72 tests passing on the Phase 2 LP Model.**
+1. **Single-Node Grid (Copper-Plate Assumption):** The model assumes an unconstrained transmission network connecting all generators and loads. Locational Marginal Pricing (LMP) and transmission line thermal limits (DC/AC power flow) are not modeled.
+2. **Deterministic Formulation:** Renewable availability and demand are assumed to be known with certainty. Stochastic programming and chance-constrained reserves are left for future research.
+3. **Pure Linear Program (No Unit Commitment):** The model uses continuous variables only. Binary decisions—such as generator start-up/shutdown, minimum up/down run times, and non-linear heat-rate curves—require Mixed-Integer Linear Programming (MILP).
+4. **Simultaneous Battery Charging & Discharging:**
+   - *Theoretical Limitation:* In pure continuous LP, binary complementary exclusion flags ($z_t \in \{0, 1\}$ enforcing $C_t \cdot D_t = 0$) are omitted to preserve polynomial solvability and allow dual shadow price extraction.
+   - *Physical Mitigation:* Because round-trip efficiency is strictly less than 1 ($\eta_c \cdot \eta_d = 0.948^2 \approx 0.899$), the cost-minimizing objective naturally disincentivizes simultaneous charging and discharging when thermal generation has positive marginal cost, as doing so destroys energy and increases cost. In rare hours with zero marginal cost or degenerate bases, minor simultaneous flows may theoretically occur.
+5. **Shadow Prices vs. Real Market LMPs:** Shadow prices ($\lambda_t$) extracted from the LP reflect the marginal cost of the dual constraint in this single-node model. They do not include uplift payments, reserve margins, or transmission congestion components present in deregulated wholesale electricity markets.
 
 ---
 
-## 11. Limitations
+## 11. Troubleshooting
 
-- **No transmission**: Single-node model; no network constraints
-- **Deterministic**: Renewable availability is fixed (no stochastic uncertainty)
-- **Synthetic data**: Datasets are not real-world grid measurements
-- **No unit commitment**: On/off decisions not modeled (LP only, no integer variables)
-- **No AC power flow**: Electrical engineering constraints not modeled
-
----
-
-## 12. Future Scope
-
-- Stochastic optimization for uncertain renewable availability
-- Multi-objective optimization (cost vs. emissions trade-off with Pareto frontier)
-- Transmission network constraints (DC power flow)
-- Multi-node dispatch
-- Machine learning demand forecasting
-- Real-time data integration (e.g., POSOCO/NPP APIs)
+| Issue | Cause | Solution |
+|---|---|---|
+| `ModuleNotFoundError: No module named 'pulp'` | Virtual environment not active or dependencies uninstalled | Run `.venv\Scripts\activate` (or `source .venv/bin/activate`) and `pip install -r requirements.txt`. |
+| `pulp.constants.PulpSolverError: Cannot find CBC` | Custom Python environment with incomplete binary wheels | PuLP includes CBC automatically for standard x86_64 architectures. If using an exotic platform, install CBC via package manager (`sudo apt-get install coinor-cbc` or `brew install cbc`). |
+| `DeprecationWarning: Constructing LpVariable directly...` | PuLP 2.8+ deprecation notice for legacy variable construction | Benign PuLP internal warning; does not affect optimization. Suppressed automatically in tests via `-W ignore::DeprecationWarning`. |
+| Port 8501 already in use | Previous Streamlit instance still running in background | Launch on an alternative port: `streamlit run app.py --server.port 8502`. |
+| Infeasible result on strict 8,760h run | Net-load ramp rate exceeds thermal ramp limit | Enable **Reliability Mode** in Advanced Configuration, or relax the thermal ramp limit to $\ge 1,000$ MW/h. |
 
 ---
 
-## 13. References and Data Sources
+## 12. Contributing & License
 
-- **PuLP Documentation**: https://coin-or.github.io/pulp/
-- **CBC Solver**: https://github.com/coin-or/Cbc
+### Contributing
+Contributions to RenewOpt are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on coding standards, testing, and pull request procedures.
 
-> **Data Attribution:** All numerical values in `data/` and `data_8760/` are **synthetic and project-generated**. They are suitable for academic demonstration only.
+### License
+This project is open-source software licensed under the **MIT License**. See the [LICENSE](LICENSE) file for the full license text.
 
-
-## 24-Hour CO₂ & Battery Demonstration
-
-The 24-hour dataset includes a synthetic `co2_cap.csv` designed specifically to demonstrate inter-temporal energy shifting.
-
-- **Synthetic Cap Values:** For most hours, the CO₂ emission cap is effectively non-binding (1,000,000 kg). During the evening peak (hours 17..20), the cap is tightened to **550,000 kg** per hour.
-- **Why it is tighter:** This simulates a restrictive emission policy during peak hours when thermal generation typically ramps up to cover the loss of solar availability.
-- **Battery Parameters:** Capacity 400 MWh, initial/min SOC 0, max SOC 400, charge/discharge rates 100 MW, efficiencies 0.948.
-- **Resulting Behavior:** The Linear Program proactively charges the battery from the grid in the hours immediately preceding the cap (e.g., hours 14-16). During the constrained evening peak (17-20), thermal generation hits its strict emission limit of ~670 MW, and the battery discharges to cover the residual demand, resulting in zero unmet demand. This clearly demonstrates Phase 2's inter-temporal coupling capabilities.
+### Attribution
+- **Project Team:** Manan Jain, Behlah Kathavala, Devansh Mehta
+- **Academic Context:** Academic Operations Research Group Project / Renewable Energy Economic Dispatch Optimization
+- **Optimization Engines:** [PuLP](https://coin-or.github.io/pulp/) and [COIN-OR CBC](https://github.com/coin-or/Cbc)

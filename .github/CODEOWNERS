@@ -1,0 +1,5 @@
+# Code owners for all repository files (shared among project team to prevent PR approval deadlock)
+* @manannn24 @behlah-rgb @dmsd723
+
+# Protect changes to this ownership file as well
+/.github/CODEOWNERS @manannn24 @behlah-rgb @dmsd723
